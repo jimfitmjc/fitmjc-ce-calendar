@@ -894,6 +894,8 @@ async function loadEvents() {
     const items = await spGetAll();
     events = items.map(item => spItemToEvent(item));
     render();
+    // Resolve any provider names that only came back as lookup IDs
+    resolveProviderNames();
   } catch(e) {
     console.error('Load error', e);
     showToast('Could not load events. Check your connection.', 'error');
@@ -902,67 +904,103 @@ async function loadEvents() {
 
 function spItemToEvent(item) {
   const f = item.fields;
-  const rawDate = f.Date || f.date || '';
+  const rawDate = f.Date || '';
 
-  // Person fields — SharePoint Graph API returns these with LookupValue
-  // Try all known variants of each internal name
-  const provider  = spPersonNameFromFields(f, 'Provider',  'Provider0');
+  // Provider (single) — returns as ProviderLookupId (numeric ID only)
+  // We store the lookup ID and resolve display name from CETeamMember pattern
+  // For now extract from Providers array if available, else blank until we
+  // build the people lookup. Provider display name comes via Providers field.
+  const provider  = spPersonNameFromFields(f, 'Provider', 'Provider0');
   const providers = spPersonNameFromFields(f, 'Providers', 'Providers0');
-  const ceTeam    = spPersonNameFromFields(f,
-    'CE_x0020_Team_x0020_Member',
-    'CETeamMember',
-    'CE Team Member',
-    'Provider2',
-    'Provider20'
-  );
+
+  // CE Team Member — confirmed internal name is "CETeamMember" (no spaces)
+  const ceTeam = spPersonNameFromFields(f, 'CETeamMember', 'CE_x0020_Team_x0020_Member');
+
+  // Decode HTML entities in notes
+  const rawNotes = f.Otherdetails || f.OtherDetails || '';
+  const notes = rawNotes
+    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, '<')
+    .replace(/&amp;/g, '&')
+    .replace(/â€™/g, "'")
+    .replace(/â€œ/g, '"')
+    .replace(/â€/g, '"');
 
   return {
     id:        item.id,
     title:     f.Title || '',
     date:      rawDate ? rawDate.split('T')[0] : '',
     timeRaw:   rawDate,
-    location:  f.location0 || f.Location || '',
+    location:  f.Location || f.location0 || '',
     address:   f.Address || '',
-    notes:     f.Otherdetails || f.OtherDetails || f.Other_x0020_details || f['Other details'] || '',
-    schedBy:   f.EventScheduledBy || f.Event_x0020_Scheduled_x0020_By || f.EventScheduledBy0 || '',
+    notes,
+    schedBy:   f.EventScheduledBy || '',
     status:    f.CE_Status || 'Scheduled',
+    // Provider single — LookupId only from Graph; store raw for now
+    // will be resolved via Providers array or direct name lookup
+    providerLookupId: f.ProviderLookupId || '',
     provider,
     providers,
     ceTeam,
     contact:   f.Initialcontactemailsent || f.InitialContactEmailSent || '',
-    reminder:  f.weekofreminder || f.WeekOfReminder || '',
-    followup:  f.followupemailsent || f.FollowUpEmailSent || '',
-    photo:     f.SocialPhotoCaptured || '',
-    nextEvent: f.FollowUpEventScheduled || '',
+    reminder:  f.Weekofreminder || f.weekofreminder || '',
+    followup:  f.Followupemailsent || f.followupemailsent || '',
+    photo:     f.SocialPhotoCaptured || f.Socialphotocaptured || '',
+    nextEvent: f.FollowUpEventScheduled || f.Followupeventsched || '',
     confDate:  f.CE_ConfirmationSentDate || '',
   };
 }
 
 function spPersonName(val) {
   if (!val) return '';
-  // Graph returns Person fields as objects with LookupValue = display name
   if (typeof val === 'object' && !Array.isArray(val)) {
     return val.LookupValue || val.displayName || val.Title || '';
   }
-  // Multi-person fields return as arrays
   if (Array.isArray(val)) {
     return val.map(v => {
       if (typeof v === 'object') return v.LookupValue || v.displayName || v.Title || '';
       return String(v);
     }).filter(Boolean).join('; ');
   }
-  // Plain string (from our CSV import)
   if (typeof val === 'string') return val;
   return String(val);
 }
 
 function spPersonNameFromFields(fields, ...keys) {
-  // Try multiple possible internal field names for the same column
   for (const key of keys) {
     const val = fields[key];
-    if (val) return spPersonName(val);
+    if (val !== undefined && val !== null && val !== '') return spPersonName(val);
   }
   return '';
+}
+
+// Resolve a SharePoint user lookup ID to a display name
+// Uses the site users endpoint — cached to avoid repeat calls
+const userCache = {};
+async function resolveUserId(lookupId) {
+  if (!lookupId) return '';
+  if (userCache[lookupId]) return userCache[lookupId];
+  try {
+    const token = await getToken();
+    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists('User Information List')/items/${lookupId}?expand=fields($select=Title,EMail)`;
+    const data = await graphFetch(url, token);
+    const name = data.fields?.Title || '';
+    userCache[lookupId] = name;
+    return name;
+  } catch(e) {
+    console.warn('Could not resolve user ID', lookupId, e);
+    return '';
+  }
+}
+
+async function resolveProviderNames() {
+  // For any event where provider is blank but providerLookupId exists, resolve it
+  const needsResolve = events.filter(e => !e.provider && e.providerLookupId);
+  if (!needsResolve.length) return;
+  await Promise.all(needsResolve.map(async ev => {
+    ev.provider = await resolveUserId(ev.providerLookupId);
+  }));
+  render();
 }
 
 function eventToSpFields(formData) {
