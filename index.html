@@ -951,25 +951,31 @@ async function spGetAll() {
 async function spCreate(fields) {
   const token = await getToken();
   const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items`;
+  console.log('SP CREATE payload:', JSON.stringify(fields, null, 2));
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields })
   });
-  if (!res.ok) throw new Error(`Create failed: ${await res.text()}`);
-  return res.json();
+  const responseText = await res.text();
+  console.log('SP CREATE response:', res.status, responseText);
+  if (!res.ok) throw new Error(`Create failed: ${responseText}`);
+  return JSON.parse(responseText);
 }
 
 async function spUpdate(itemId, fields) {
   const token = await getToken();
   const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items/${itemId}/fields`;
+  console.log('SP UPDATE payload:', JSON.stringify(fields, null, 2));
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(fields)
   });
-  if (!res.ok) throw new Error(`Update failed: ${await res.text()}`);
-  return res.json();
+  const responseText = await res.text();
+  console.log('SP UPDATE response:', res.status, responseText);
+  if (!res.ok) throw new Error(`Update failed: ${responseText}`);
+  return JSON.parse(responseText);
 }
 
 async function spDelete(itemId) {
