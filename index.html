@@ -687,6 +687,7 @@ const CE_TEAM_EMAILS = [
   'krista@fitmjc.com','krista.schoutko@fitmjc.com',
   'winnie@fitmjc.com','winnie.wilson@fitmjc.com',
   'peyton@fitmjc.com','peyton.brown@fitmjc.com',
+  'jim@fitmjc.com','jim.heatherman@fitmjc.com',
 ];
 
 // Provider weekend pool from 2026 Excel schedule (Saturday = week key)
@@ -843,9 +844,13 @@ async function graphFetch(path, token) {
 async function spGetAll() {
   setLoading(true);
   const token = await getToken();
-  const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items?expand=fields&$top=999`;
+  const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items?expand=fields($select=*)&$top=999`;
   const data = await graphFetch(url, token);
   setLoading(false);
+  // Debug: log first item fields so we can see exact internal names
+  if (data.value && data.value.length > 0) {
+    console.log('CE Events — first item raw fields:', JSON.stringify(data.value[0].fields, null, 2));
+  }
   return data.value || [];
 }
 
@@ -898,6 +903,19 @@ async function loadEvents() {
 function spItemToEvent(item) {
   const f = item.fields;
   const rawDate = f.Date || f.date || '';
+
+  // Person fields — SharePoint Graph API returns these with LookupValue
+  // Try all known variants of each internal name
+  const provider  = spPersonNameFromFields(f, 'Provider',  'Provider0');
+  const providers = spPersonNameFromFields(f, 'Providers', 'Providers0');
+  const ceTeam    = spPersonNameFromFields(f,
+    'CE_x0020_Team_x0020_Member',
+    'CETeamMember',
+    'CE Team Member',
+    'Provider2',
+    'Provider20'
+  );
+
   return {
     id:        item.id,
     title:     f.Title || '',
@@ -905,15 +923,15 @@ function spItemToEvent(item) {
     timeRaw:   rawDate,
     location:  f.location0 || f.Location || '',
     address:   f.Address || '',
-    notes:     f.Otherdetails || f.Other_x0020_details || f['Other details'] || '',
-    schedBy:   f.EventScheduledBy || f.Event_x0020_Scheduled_x0020_By || '',
+    notes:     f.Otherdetails || f.OtherDetails || f.Other_x0020_details || f['Other details'] || '',
+    schedBy:   f.EventScheduledBy || f.Event_x0020_Scheduled_x0020_By || f.EventScheduledBy0 || '',
     status:    f.CE_Status || 'Scheduled',
-    provider:  spPersonName(f.Provider),
-    providers: spPersonName(f.Providers),
-    ceTeam:    spPersonName(f.CE_x0020_Team_x0020_Member || f['CE Team Member']),
-    contact:   f.Initialcontactemailsent || '',
-    reminder:  f.weekofreminder || '',
-    followup:  f.followupemailsent || '',
+    provider,
+    providers,
+    ceTeam,
+    contact:   f.Initialcontactemailsent || f.InitialContactEmailSent || '',
+    reminder:  f.weekofreminder || f.WeekOfReminder || '',
+    followup:  f.followupemailsent || f.FollowUpEmailSent || '',
     photo:     f.SocialPhotoCaptured || '',
     nextEvent: f.FollowUpEventScheduled || '',
     confDate:  f.CE_ConfirmationSentDate || '',
@@ -922,10 +940,29 @@ function spItemToEvent(item) {
 
 function spPersonName(val) {
   if (!val) return '';
+  // Graph returns Person fields as objects with LookupValue = display name
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    return val.LookupValue || val.displayName || val.Title || '';
+  }
+  // Multi-person fields return as arrays
+  if (Array.isArray(val)) {
+    return val.map(v => {
+      if (typeof v === 'object') return v.LookupValue || v.displayName || v.Title || '';
+      return String(v);
+    }).filter(Boolean).join('; ');
+  }
+  // Plain string (from our CSV import)
   if (typeof val === 'string') return val;
-  if (Array.isArray(val)) return val.map(v => v.LookupValue || v.displayName || v).filter(Boolean).join('; ');
-  if (typeof val === 'object') return val.LookupValue || val.displayName || '';
   return String(val);
+}
+
+function spPersonNameFromFields(fields, ...keys) {
+  // Try multiple possible internal field names for the same column
+  for (const key of keys) {
+    const val = fields[key];
+    if (val) return spPersonName(val);
+  }
+  return '';
 }
 
 function eventToSpFields(formData) {
