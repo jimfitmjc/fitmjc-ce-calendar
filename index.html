@@ -356,6 +356,64 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .empty-state i { font-size: 40px; display: block; margin-bottom: .75rem; }
 .empty-state p { font-size: 14px; }
 
+/* ── WEEK VIEW ──────────────────────────────────────────── */
+.week-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.week-grid { display: grid; grid-template-columns: 52px repeat(7, 1fr); }
+.week-hdr-spacer { background: var(--surface2); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 8px 4px; }
+.week-hdr {
+  background: var(--surface2); padding: 8px 6px; text-align: center;
+  border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+}
+.week-hdr:last-child { border-right: none; }
+.week-hdr-day { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+.week-hdr-num { font-size: 20px; font-weight: 700; color: var(--text1); line-height: 1.2; }
+.week-hdr-num.is-today {
+  background: var(--brand); color: #fff; border-radius: 50%;
+  width: 32px; height: 32px; display: flex; align-items: center;
+  justify-content: center; margin: 0 auto;
+}
+.week-hdr.is-weekend { background: #FAFAFA; }
+.week-time-col {
+  border-right: 1px solid var(--border); background: var(--surface2);
+}
+.week-time-slot {
+  height: 56px; padding: 4px 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; color: var(--text3); text-align: right;
+}
+.week-day-col {
+  border-right: 1px solid var(--border); position: relative; min-height: 56px;
+}
+.week-day-col:last-child { border-right: none; }
+.week-day-col.is-weekend { background: #FAFAFA; }
+.week-slot {
+  height: 56px; border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.week-slot:last-child { border-bottom: none; }
+.week-pool-banner {
+  background: #F1F5F9; border-bottom: 1px solid #E2E8F0;
+  padding: 4px 6px; font-size: 9px; color: #475569; font-weight: 600;
+  border-left: 3px solid #CBD5E1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.week-ev {
+  margin: 1px 2px; border-radius: 4px; padding: 3px 5px;
+  font-size: 11px; cursor: pointer; border-left: 3px solid transparent;
+  line-height: 1.35; transition: opacity .1s;
+}
+.week-ev:hover { opacity: .85; }
+.week-ev.s-Scheduled { background: var(--sched-bg); border-left-color: var(--sched-bd); color: var(--sched-tx); }
+.week-ev.s-Confirmed  { background: var(--conf-bg);  border-left-color: var(--conf-bd);  color: var(--conf-tx);  }
+.week-ev.s-Completed  { background: var(--comp-bg);  border-left-color: var(--comp-bd);  color: var(--comp-tx);  }
+.week-ev-time { font-size: 10px; opacity: .75; }
+.week-ev-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-ev-prov { font-size: 10px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-allday-row { display: grid; grid-template-columns: 52px repeat(7,1fr); border-bottom: 1px solid var(--border); }
+.week-allday-label { background: var(--surface2); border-right: 1px solid var(--border); padding: 4px 6px; font-size: 9px; color: var(--text3); text-align: right; display: flex; align-items: center; justify-content: flex-end; }
+.week-allday-cell { border-right: 1px solid var(--border); min-height: 24px; padding: 2px 3px; }
+.week-allday-cell:last-child { border-right: none; }
+.week-allday-cell.is-weekend { background: #FAFAFA; }
+
 /* ── RESPONSIVE ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .stats-row { grid-template-columns: 1fr 1fr; }
@@ -422,6 +480,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div class="nav-right">
       <div class="view-toggle">
         <button class="view-btn active" id="vMonth" onclick="setView('month')">Month</button>
+        <button class="view-btn" id="vWeek"  onclick="setView('week')">Week</button>
         <button class="view-btn" id="vList"  onclick="setView('list')">List</button>
       </div>
       <button class="add-event-btn" onclick="openNewEventModal()"><i class="ti ti-plus"></i> New event</button>
@@ -483,6 +542,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
           <div class="cal-hdr">Sat</div>
         </div>
       </div>
+    </div>
+    <div id="weekView" style="display:none">
+      <div class="week-wrap" id="weekWrap"></div>
     </div>
     <div id="listView" style="display:none"></div>
 
@@ -778,6 +840,15 @@ let curView  = 'month';
 let curTab   = 'all';
 let editingEventId = null;
 let detailEventId  = null;
+
+// Week view state — Sunday of current week
+function getWeekStart(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - d.getDay());
+  d.setHours(0,0,0,0);
+  return d;
+}
+let curWeekStart = getWeekStart(new Date());
 
 // ── MSAL SETUP ────────────────────────────────────────────
 const msalConfig = {
@@ -1112,10 +1183,13 @@ function getWeekendPool(dateStr) {
 // ── RENDER ────────────────────────────────────────────────
 function render() {
   updateStats();
-  curView === 'list' ? renderList() : renderCalendar();
+  if (curView === 'list')  renderList();
+  else if (curView === 'week') renderWeek();
+  else renderCalendar();
 }
 
 function updateStats() {
+  // Stats always show current month regardless of view
   const month = events.filter(e => {
     const d = new Date(e.date + 'T12:00:00');
     return d.getMonth() === curMonth && d.getFullYear() === curYear;
@@ -1127,12 +1201,143 @@ function updateStats() {
 }
 
 function filteredEvents() {
+  if (curView === 'week') {
+    // Week view: filter to current week regardless of month
+    const weekEnd = new Date(curWeekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23,59,59,999);
+    return events.filter(e => {
+      const d = new Date(e.date + 'T12:00:00');
+      return d >= curWeekStart && d <= weekEnd && (curTab === 'all' || e.status === curTab);
+    });
+  }
   return events.filter(e => {
     const d = new Date(e.date + 'T12:00:00');
     const inMonth = d.getMonth() === curMonth && d.getFullYear() === curYear;
     const matchTab = curTab === 'all' || e.status === curTab;
     return inMonth && matchTab;
   });
+}
+
+function renderWeek() {
+  const wrap = document.getElementById('weekWrap');
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Build 7 days of the week
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(curWeekStart);
+    d.setDate(curWeekStart.getDate() + i);
+    days.push(d);
+  }
+
+  // Update nav label to show week range
+  const wStart = days[0];
+  const wEnd   = days[6];
+  const sameMo = wStart.getMonth() === wEnd.getMonth();
+  document.getElementById('monthLabel').textContent = sameMo
+    ? `${MONTHS[wStart.getMonth()]} ${wStart.getDate()}–${wEnd.getDate()}, ${wStart.getFullYear()}`
+    : `${MONTHS[wStart.getMonth()]} ${wStart.getDate()} – ${MONTHS[wEnd.getMonth()]} ${wEnd.getDate()}, ${wStart.getFullYear()}`;
+
+  // Build event map by date string
+  const evMap = {};
+  filteredEvents().forEach(e => {
+    if (!evMap[e.date]) evMap[e.date] = [];
+    evMap[e.date].push(e);
+  });
+
+  // Time slots: 6 AM – 10 PM in 1-hour increments
+  const START_HOUR = 6;
+  const END_HOUR   = 22;
+  const hours = [];
+  for (let h = START_HOUR; h <= END_HOUR; h++) hours.push(h);
+
+  // Build HTML
+  let html = '';
+
+  // Header row
+  html += '<div class="week-grid">';
+  html += '<div class="week-hdr-spacer"></div>';
+  days.forEach((d, i) => {
+    const isToday   = d.getTime() === today.getTime();
+    const isWeekend = i === 0 || i === 6;
+    const numHtml   = isToday
+      ? `<div class="week-hdr-num is-today">${d.getDate()}</div>`
+      : `<div class="week-hdr-num">${d.getDate()}</div>`;
+    html += `<div class="week-hdr${isWeekend?' is-weekend':''}">
+      <div class="week-hdr-day">${DAYS[d.getDay()]}</div>
+      ${numHtml}
+    </div>`;
+  });
+  html += '</div>';
+
+  // All-day row: provider pool banners for weekend days
+  html += '<div class="week-allday-row">';
+  html += '<div class="week-allday-label">pool</div>';
+  days.forEach((d, i) => {
+    const isWeekend = i === 0 || i === 6;
+    const dateStr   = d.toISOString().split('T')[0];
+    const pool      = isWeekend ? getWeekendPool(dateStr) : [];
+    const isToday   = d.getTime() === today.getTime();
+    html += `<div class="week-allday-cell${isWeekend?' is-weekend':''}${isToday?' is-today-cell':''}">`;
+    if (pool.length) {
+      html += `<div class="week-pool-banner" title="Weekend pool: ${pool.join(', ')}">${pool.slice(0,4).join(', ')}${pool.length > 4 ? ` +${pool.length-4}` : ''}</div>`;
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Time grid
+  html += '<div class="week-grid" style="overflow-y:auto;max-height:520px">';
+
+  // Time labels column + day columns
+  // First pass: build per-day, per-hour event buckets
+  const buckets = {}; // buckets[dayIndex][hour] = [events]
+  days.forEach((d, di) => {
+    buckets[di] = {};
+    hours.forEach(h => { buckets[di][h] = []; });
+    const dateStr = d.toISOString().split('T')[0];
+    (evMap[dateStr] || []).forEach(ev => {
+      const evDate = ev.timeRaw ? new Date(ev.timeRaw) : null;
+      const h = evDate ? evDate.getHours() : START_HOUR;
+      const slot = Math.max(START_HOUR, Math.min(END_HOUR, h));
+      buckets[di][slot].push(ev);
+    });
+  });
+
+  // Render time column
+  html += '<div class="week-time-col">';
+  hours.forEach(h => {
+    const label = h === 12 ? '12 PM' : h < 12 ? `${h} AM` : `${h-12} PM`;
+    html += `<div class="week-time-slot">${label}</div>`;
+  });
+  html += '</div>';
+
+  // Render day columns
+  days.forEach((d, di) => {
+    const isWeekend = di === 0 || di === 6;
+    html += `<div class="week-day-col${isWeekend?' is-weekend':''}">`;
+    hours.forEach(h => {
+      html += `<div class="week-slot">`;
+      (buckets[di][h] || []).forEach(ev => {
+        const t = ev.timeRaw
+          ? new Date(ev.timeRaw).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})
+          : '';
+        const prov = ev.provider || (ev.providers ? ev.providers.split(';')[0].trim() : '');
+        html += `<div class="week-ev s-${ev.status}" onclick="openDetailModal('${ev.id}')" title="${ev.title}">
+          <div class="week-ev-time">${t}</div>
+          <div class="week-ev-title">${ev.title}</div>
+          ${prov ? `<div class="week-ev-prov">${prov}</div>` : ''}
+        </div>`;
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  html += '</div>'; // end week-grid time section
+  wrap.innerHTML = html;
 }
 
 function renderCalendar() {
@@ -1227,7 +1432,11 @@ function renderCalendar() {
         const more = document.createElement('div');
         more.className = 'more-chip';
         more.textContent = `+${dayEvs.length - MAX_VISIBLE} more`;
-        more.onclick = () => { setView('list'); };
+        more.onclick = () => {
+          // Switch to week view centered on this day
+          curWeekStart = getWeekStart(new Date(curYear, curMonth, dayNum));
+          setView('week');
+        };
         cell.appendChild(more);
       }
     }
@@ -1513,17 +1722,34 @@ function openModal(id)  { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 function changeMonth(d) {
-  curMonth += d;
-  if (curMonth > 11) { curMonth = 0; curYear++; }
-  if (curMonth < 0)  { curMonth = 11; curYear--; }
+  if (curView === 'week') {
+    // Navigate by week
+    curWeekStart = new Date(curWeekStart);
+    curWeekStart.setDate(curWeekStart.getDate() + d * 7);
+    // Keep curMonth/curYear in sync with week start
+    curMonth = curWeekStart.getMonth();
+    curYear  = curWeekStart.getFullYear();
+  } else {
+    curMonth += d;
+    if (curMonth > 11) { curMonth = 0; curYear++; }
+    if (curMonth < 0)  { curMonth = 11; curYear--; }
+  }
   render();
 }
 
 function setView(v) {
   curView = v;
+  // Sync week start to current month when switching to week view
+  if (v === 'week') {
+    const today = new Date();
+    const inCurrentMonth = today.getMonth() === curMonth && today.getFullYear() === curYear;
+    curWeekStart = getWeekStart(inCurrentMonth ? today : new Date(curYear, curMonth, 1));
+  }
   document.getElementById('vMonth').classList.toggle('active', v === 'month');
-  document.getElementById('vList').classList.toggle('active', v === 'list');
+  document.getElementById('vWeek').classList.toggle('active',  v === 'week');
+  document.getElementById('vList').classList.toggle('active',  v === 'list');
   document.getElementById('monthView').style.display = v === 'month' ? 'block' : 'none';
+  document.getElementById('weekView').style.display  = v === 'week'  ? 'block' : 'none';
   document.getElementById('listView').style.display  = v === 'list'  ? 'block' : 'none';
   render();
 }
