@@ -1042,11 +1042,11 @@ function spItemToEvent(item) {
     provider,
     providers,
     ceTeam,
-    contact:   f.Initialcontactemailsent || f.InitialContactEmailSent || '',
-    reminder:  f.Weekofreminder || f.weekofreminder || '',
-    followup:  f.Followupemailsent || f.followupemailsent || '',
-    photo:     f.SocialPhotoCaptured || f.Socialphotocaptured || '',
-    nextEvent: f.FollowUpEventScheduled || f.Followupeventsched || '',
+    contact:   f.Initialcontactemailsent || '',
+    reminder:  f.Weekofreminder          || '',
+    followup:  f.Followupemailsent       || '',
+    photo:     f.SocialPhotoCaptured     || '',
+    nextEvent: f.FollowUpEventScheduled  || '',
     confDate:  f.CE_ConfirmationSentDate || '',
   };
 }
@@ -1130,19 +1130,21 @@ async function resolveUserEmail(nameOrEmail) {
 }
 
 function eventToSpFields(formData) {
-  // Only include fields with values — omit blanks to avoid SP validation errors
+  // Choice fields: send the value or null (not empty string — SP ignores "")
+  const choiceVal = (checked, trueVal) => checked ? trueVal : null;
+
   const fields = {
-    Title:            formData.title,
-    CE_Status:        formData.status,
-    Address:          formData.address        || '',
-    Otherdetails:     formData.notes          || '',
-    EventScheduledBy: formData.schedBy        || '',
-    // Correct internal names verified from Graph API raw fields:
-    Initialcontactemailsent: formData.contact  ? 'yes' : '',
-    Weekofreminder:          formData.reminder ? 'yes' : '',
-    Followupemailsent:       formData.followup ? 'yes' : '',
-    SocialPhotoCaptured:     formData.photo    ? 'yes' : '',
-    FollowUpEventScheduled:  formData.nextEvent? 'Yes' : '',
+    Title:                   formData.title,
+    CE_Status:               formData.status,
+    Address:                 formData.address     || '',
+    Otherdetails:            formData.notes       || '',
+    EventScheduledBy:        formData.schedBy     || '',
+    // All internal names confirmed from SP field API:
+    Initialcontactemailsent: choiceVal(formData.contact,   'yes'),
+    Weekofreminder:          choiceVal(formData.reminder,  'yes'),
+    Followupemailsent:       choiceVal(formData.followup,  'yes'),
+    SocialPhotoCaptured:     choiceVal(formData.photo,     'yes'),
+    FollowUpEventScheduled:  choiceVal(formData.nextEvent, 'Yes'),
   };
   if (formData.date) {
     const timeStr = formData.time || '00:00';
