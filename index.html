@@ -1026,23 +1026,72 @@ async function resolveProviderNames() {
   render();
 }
 
+// Lookup user ID by email or display name for Person field writes
+const userEmailCache = {};
+async function resolveUserEmail(nameOrEmail) {
+  if (!nameOrEmail) return null;
+  const key = nameOrEmail.toLowerCase().trim();
+  if (userEmailCache[key] !== undefined) return userEmailCache[key];
+  try {
+    const token = await getToken();
+    // Search site user list by email or display name
+    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists('User Information List')/items?expand=fields($select=Title,EMail,id)&$top=999`;
+    const data = await graphFetch(url, token);
+    const match = (data.value || []).find(item => {
+      const email = (item.fields?.EMail || '').toLowerCase();
+      const title = (item.fields?.Title || '').toLowerCase();
+      return email === key || title === key || title.startsWith(key.split(' ')[0].toLowerCase());
+    });
+    const id = match ? parseInt(match.fields?.id || match.id) : null;
+    userEmailCache[key] = id;
+    return id;
+  } catch(e) {
+    console.warn('Could not resolve user:', nameOrEmail, e);
+    userEmailCache[key] = null;
+    return null;
+  }
+}
+
 function eventToSpFields(formData) {
+  // Only include fields with values — omit blanks to avoid SP validation errors
   const fields = {
-    Title: formData.title,
-    CE_Status: formData.status,
-    Address: formData.address,
-    Otherdetails: formData.notes,
-    EventScheduledBy: formData.schedBy,
-    Initialcontactemailsent: formData.contact ? 'yes' : '',
-    weekofreminder: formData.reminder ? 'yes' : '',
-    followupemailsent: formData.followup ? 'yes' : '',
-    SocialPhotoCaptured: formData.photo ? 'yes' : '',
-    FollowUpEventScheduled: formData.nextEvent ? 'Yes' : '',
+    Title:            formData.title,
+    CE_Status:        formData.status,
+    Address:          formData.address        || '',
+    Otherdetails:     formData.notes          || '',
+    EventScheduledBy: formData.schedBy        || '',
+    // Correct internal names verified from Graph API raw fields:
+    Initialcontactemailsent: formData.contact  ? 'yes' : '',
+    Weekofreminder:          formData.reminder ? 'yes' : '',
+    Followupemailsent:       formData.followup ? 'yes' : '',
+    SocialPhotoCaptured:     formData.photo    ? 'yes' : '',
+    FollowUpEventScheduled:  formData.nextEvent? 'Yes' : '',
   };
   if (formData.date) {
     const timeStr = formData.time || '00:00';
     fields.Date = `${formData.date}T${timeStr}:00`;
   }
+  return fields;
+}
+
+async function eventToSpFieldsWithPeople(formData) {
+  // Build base fields
+  const fields = eventToSpFields(formData);
+
+  // Resolve Provider (single person) → ProviderLookupId
+  if (formData.provider) {
+    const id = await resolveUserEmail(formData.provider);
+    if (id) fields.ProviderLookupId = id;
+  }
+
+  // Resolve CETeamMember (multi person) → CETeamMemberLookupId (array)
+  if (formData.ceTeam) {
+    const names = formData.ceTeam.split(';').map(s => s.trim()).filter(Boolean);
+    const ids = (await Promise.all(names.map(n => resolveUserEmail(n)))).filter(Boolean);
+    if (ids.length) fields['CETeamMemberLookupId@odata.type'] = 'Collection(Edm.Int32)';
+    if (ids.length) fields.CETeamMemberLookupId = ids;
+  }
+
   return fields;
 }
 
@@ -1410,7 +1459,7 @@ async function saveEvent() {
   };
 
   try {
-    const fields = eventToSpFields(formData);
+    const fields = await eventToSpFieldsWithPeople(formData);
     if (editingEventId) {
       await spUpdate(editingEventId, fields);
       const idx = events.findIndex(e => e.id === editingEventId);
