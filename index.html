@@ -1031,8 +1031,15 @@ function spItemToEvent(item) {
     title:     f.Title || '',
     date:      rawDate ? rawDate.split('T')[0] : '',
     timeRaw:   rawDate,
-    location:  f.Location || f.location0 || '',
-    address:   f.Address || '',
+    // Address field stores "Venue Name | Street Address" — split on read
+    location:  (() => {
+      const addr = f.Address || '';
+      return addr.includes(' | ') ? addr.split(' | ')[0].trim() : '';
+    })(),
+    address:   (() => {
+      const addr = f.Address || '';
+      return addr.includes(' | ') ? addr.split(' | ')[1].trim() : addr;
+    })(),
     notes,
     schedBy:   f.EventScheduledBy || '',
     status:    f.CE_Status || 'Scheduled',
@@ -1130,16 +1137,19 @@ async function resolveUserEmail(nameOrEmail) {
 }
 
 function eventToSpFields(formData) {
-  // Choice fields: send the value or null (not empty string — SP ignores "")
   const choiceVal = (checked, trueVal) => checked ? trueVal : null;
+
+  // Combine venue name + street address into the single Address SP field
+  // Format: "Venue Name | Street Address" — split on read
+  const locationParts = [formData.location, formData.address].filter(Boolean);
+  const combinedAddress = locationParts.join(' | ');
 
   const fields = {
     Title:                   formData.title,
     CE_Status:               formData.status,
-    Address:                 formData.address     || '',
+    Address:                 combinedAddress,
     Otherdetails:            formData.notes       || '',
     EventScheduledBy:        formData.schedBy     || '',
-    // All internal names confirmed from SP field API:
     Initialcontactemailsent: choiceVal(formData.contact,   'yes'),
     Weekofreminder:          choiceVal(formData.reminder,  'yes'),
     Followupemailsent:       choiceVal(formData.followup,  'yes'),
@@ -1154,21 +1164,43 @@ function eventToSpFields(formData) {
 }
 
 async function eventToSpFieldsWithPeople(formData) {
-  // Build base fields
   const fields = eventToSpFields(formData);
 
-  // Resolve Provider (single person) → ProviderLookupId
+  // Provider (single) → ProviderLookupId
   if (formData.provider) {
     const id = await resolveUserEmail(formData.provider);
     if (id) fields.ProviderLookupId = id;
+    else if (!id) fields.ProviderLookupId = null; // clear if not resolved
+  } else {
+    fields.ProviderLookupId = null;
   }
 
-  // Resolve CETeamMember (multi person) → CETeamMemberLookupId (array)
+  // Providers (multi) → ProvidersLookupId array
+  if (formData.providers) {
+    const names = formData.providers.split(';').map(s => s.trim()).filter(Boolean);
+    const ids = (await Promise.all(names.map(n => resolveUserEmail(n)))).filter(Boolean);
+    if (ids.length) {
+      fields['ProvidersLookupId@odata.type'] = 'Collection(Edm.Int32)';
+      fields.ProvidersLookupId = ids;
+    } else {
+      fields.ProvidersLookupId = null;
+    }
+  } else {
+    fields.ProvidersLookupId = null;
+  }
+
+  // CETeamMember (multi) → CETeamMemberLookupId array
   if (formData.ceTeam) {
     const names = formData.ceTeam.split(';').map(s => s.trim()).filter(Boolean);
     const ids = (await Promise.all(names.map(n => resolveUserEmail(n)))).filter(Boolean);
-    if (ids.length) fields['CETeamMemberLookupId@odata.type'] = 'Collection(Edm.Int32)';
-    if (ids.length) fields.CETeamMemberLookupId = ids;
+    if (ids.length) {
+      fields['CETeamMemberLookupId@odata.type'] = 'Collection(Edm.Int32)';
+      fields.CETeamMemberLookupId = ids;
+    } else {
+      fields.CETeamMemberLookupId = null;
+    }
+  } else {
+    fields.CETeamMemberLookupId = null;
   }
 
   return fields;
