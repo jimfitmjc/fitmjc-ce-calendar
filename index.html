@@ -9,10 +9,10 @@
 <style>
 /* ── TOKENS ─────────────────────────────────────────────── */
 :root {
-  --brand:       #1D9E75;
-  --brand-light: #E1F5EE;
-  --brand-mid:   #9FE1CB;
-  --brand-dark:  #0F6E56;
+  --brand:       #C8102E;
+  --brand-light: #FDF0F2;
+  --brand-mid:   #F4A0AC;
+  --brand-dark:  #8B0B1F;
   --ce-purple:   #6C63D5;
   --ce-purple-light: #EEEDFE;
   --ce-purple-mid:   #AFA9EC;
@@ -50,10 +50,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .auth-card {
   background: var(--surface); border-radius: var(--radius-lg);
   border: 1px solid var(--border); padding: 2.5rem 2rem;
-  width: 360px; text-align: center; box-shadow: var(--shadow-md);
+  width: 380px; text-align: center; box-shadow: var(--shadow-md);
 }
-.auth-logo { font-size: 13px; font-weight: 600; color: var(--text2); letter-spacing: .08em; text-transform: uppercase; margin-bottom: .5rem; }
-.auth-title { font-size: 22px; font-weight: 700; color: var(--text1); margin-bottom: .5rem; }
+.auth-logo-wrap { display: flex; justify-content: center; margin-bottom: 1.25rem; }
+.auth-logo-inner {
+  background: #0A0A0A; border-radius: var(--radius-md);
+  padding: 12px 20px; display: inline-block;
+}
+.auth-title { font-size: 20px; font-weight: 700; color: var(--text1); margin-bottom: .5rem; }
 .auth-sub { font-size: 13px; color: var(--text2); margin-bottom: 1.75rem; line-height: 1.5; }
 .auth-btn {
   width: 100%; padding: .75rem; background: var(--brand); color: #fff;
@@ -69,30 +73,30 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
 /* ── TOP NAV ────────────────────────────────────────────── */
 .topnav {
-  background: var(--surface); border-bottom: 1px solid var(--border);
+  background: #0A0A0A; border-bottom: 1px solid #222;
   padding: 0 1.5rem; display: flex; align-items: center;
-  justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 50;
+  justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 50;
 }
-.nav-brand { display: flex; align-items: center; gap: 10px; }
-.nav-logo {
-  width: 28px; height: 28px; background: var(--brand); border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 800; color: #fff; letter-spacing: -.5px;
+.nav-brand { display: flex; align-items: center; gap: 12px; }
+.nav-logo-wrap {
+  display: flex; align-items: center; gap: 10px;
 }
-.nav-name { font-size: 14px; font-weight: 600; color: var(--text1); }
-.nav-name span { color: var(--brand); }
+.nav-logo-svg { height: 32px; width: auto; }
+.nav-divider { width: 1px; height: 28px; background: #333; }
+.nav-tool-name { font-size: 13px; font-weight: 600; color: #fff; letter-spacing: .02em; }
+.nav-tool-sub { font-size: 11px; color: #888; margin-top: 1px; }
 .nav-center { display: flex; align-items: center; gap: 8px; }
 .nav-month-btn {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 4px 8px; color: var(--text2); font-size: 13px; line-height: 1;
+  background: none; border: 1px solid #333; border-radius: var(--radius-sm);
+  padding: 4px 8px; color: #aaa; font-size: 13px; line-height: 1;
   transition: background .1s;
 }
-.nav-month-btn:hover { background: var(--surface2); }
-.nav-month-label { font-size: 15px; font-weight: 600; color: var(--text1); min-width: 130px; text-align: center; }
+.nav-month-btn:hover { background: #1a1a1a; color: #fff; }
+.nav-month-label { font-size: 15px; font-weight: 600; color: #fff; min-width: 130px; text-align: center; }
 .nav-right { display: flex; align-items: center; gap: 8px; }
-.view-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.view-btn { background: none; border: none; padding: 5px 12px; font-size: 12px; color: var(--text2); transition: background .1s; }
-.view-btn.active { background: var(--surface2); color: var(--text1); font-weight: 600; }
+.view-toggle { display: flex; border: 1px solid #333; border-radius: var(--radius-sm); overflow: hidden; }
+.view-btn { background: none; border: none; padding: 5px 12px; font-size: 12px; color: #888; transition: background .1s; }
+.view-btn.active { background: #222; color: #fff; font-weight: 600; }
 .add-event-btn {
   background: var(--brand); color: #fff; border: none;
   border-radius: var(--radius-sm); padding: 6px 14px;
@@ -102,8 +106,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .add-event-btn:hover { opacity: .9; }
 .user-pill {
   display: flex; align-items: center; gap: 6px; padding: 4px 10px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 20px; font-size: 12px; color: var(--text2);
+  background: #1a1a1a; border: 1px solid #333;
+  border-radius: 20px; font-size: 12px; color: #aaa;
 }
 .user-avatar {
   width: 20px; height: 20px; border-radius: 50%; background: var(--brand);
@@ -169,10 +173,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   border-radius: 3px; padding: 1px 4px; font-weight: 600; margin-bottom: 3px;
 }
 .pool-strip {
-  background: var(--brand-light); border-radius: 3px; padding: 2px 5px;
-  font-size: 9px; color: var(--brand-dark); margin-bottom: 3px;
+  background: #F1F5F9; border-radius: 3px; padding: 2px 5px;
+  font-size: 9px; color: #475569; margin-bottom: 3px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;
-  cursor: default; border-left: 2px solid var(--brand-mid);
+  cursor: default; border-left: 2px solid #CBD5E1;
 }
 .ev-chip {
   border-radius: 3px; padding: 2px 5px; font-size: 10px; margin-bottom: 2px;
@@ -371,9 +375,16 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 <!-- Auth overlay -->
 <div id="authOverlay">
   <div class="auth-card">
-    <div class="auth-logo">F.I.T. MJC</div>
-    <div class="auth-title">CE Calendar</div>
-    <div class="auth-sub">Sign in with your F.I.T. MJC account to access the Community Engagement scheduling tool.</div>
+    <div class="auth-logo-wrap">
+      <div class="auth-logo-inner">
+        <svg viewBox="0 0 120 36" width="120" height="36" xmlns="http://www.w3.org/2000/svg">
+          <text x="0" y="22" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="900" fill="#FFFFFF" letter-spacing="1">F.I.T.</text>
+          <text x="1" y="33" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8" font-weight="500" fill="#C8102E" letter-spacing="1.5">MUSCLE &amp; JOINT</text>
+        </svg>
+      </div>
+    </div>
+    <div class="auth-title">Community Engagement Calendar</div>
+    <div class="auth-sub">Sign in with your F.I.T. MJC Microsoft account to access the CE scheduling tool.</div>
     <button class="auth-btn" id="signInBtn" onclick="signIn()">
       <i class="ti ti-brand-microsoft"></i>
       Sign in with Microsoft
@@ -388,8 +399,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   <!-- Top nav -->
   <nav class="topnav">
     <div class="nav-brand">
-      <div class="nav-logo">FIT</div>
-      <div class="nav-name">F.I.T. MJC <span>CE Calendar</span></div>
+      <div class="nav-logo-wrap">
+        <!-- F.I.T. MJC wordmark SVG logo -->
+        <svg class="nav-logo-svg" viewBox="0 0 120 36" xmlns="http://www.w3.org/2000/svg" aria-label="F.I.T. Muscle and Joint Clinic">
+          <!-- FIT letters -->
+          <text x="0" y="22" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="900" fill="#FFFFFF" letter-spacing="1">F.I.T.</text>
+          <!-- Subtitle -->
+          <text x="1" y="33" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8" font-weight="500" fill="#C8102E" letter-spacing="1.5">MUSCLE &amp; JOINT</text>
+        </svg>
+        <div class="nav-divider"></div>
+        <div>
+          <div class="nav-tool-name">CE Calendar</div>
+          <div class="nav-tool-sub">Community Engagement</div>
+        </div>
+      </div>
     </div>
     <div class="nav-center">
       <button class="nav-month-btn" onclick="changeMonth(-1)"><i class="ti ti-chevron-left"></i></button>
@@ -444,7 +467,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <button class="filter-tab f-completed" onclick="setTab(this,'Completed')">Completed</button>
       <div class="filter-spacer"></div>
       <div class="legend">
-        <div class="leg"><div class="leg-dot" style="background:var(--brand-mid)"></div> Provider pool</div>
+        <div class="leg"><div class="leg-dot" style="background:#CBD5E1"></div> Provider pool</div>
         <div class="leg"><div class="leg-dot" style="background:var(--sched-bd)"></div> Scheduled</div>
         <div class="leg"><div class="leg-dot" style="background:var(--conf-bd)"></div> Confirmed</div>
         <div class="leg"><div class="leg-dot" style="background:var(--comp-bd)"></div> Completed</div>
