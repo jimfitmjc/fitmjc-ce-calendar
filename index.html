@@ -139,7 +139,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .filter-tab.active { background: var(--brand); border-color: var(--brand); color: #fff; }
 .filter-tab.f-scheduled.active { background: var(--sched-bd); border-color: var(--sched-bd); }
 .filter-tab.f-confirmed.active { background: var(--conf-bd); border-color: var(--conf-bd); }
-.filter-tab.f-completed.active { background: var(--comp-bd); border-color: var(--comp-bd); }
+.filter-tab.f-myevents.active { background: var(--ce-purple); border-color: var(--ce-purple); }
 .filter-spacer { flex: 1; }
 .legend { display: flex; align-items: center; gap: 12px; }
 .leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); }
@@ -147,24 +147,40 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
 /* ── CALENDAR GRID ──────────────────────────────────────── */
 .cal-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
-.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); }
+.cal-grid { display: grid; grid-template-columns: 80px repeat(7,1fr); }
 .cal-hdr {
   background: var(--surface2); padding: 7px 8px; font-size: 11px; font-weight: 600;
   color: var(--text2); text-align: center; border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border); text-transform: uppercase; letter-spacing: .04em;
 }
 .cal-hdr:last-child { border-right: none; }
+.cal-hdr-pool {
+  background: #F1F5F9; color: #475569; font-size: 10px;
+  border-right: 2px solid var(--border2);
+}
+.cal-hdr.is-weekend-hdr { background: #F0FDF9; color: var(--brand-dark); }
 .day-cell {
   min-height: 116px; padding: 6px; border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border); background: var(--surface);
   position: relative; vertical-align: top;
 }
-.day-cell:nth-child(7n) { border-right: none; }
+.day-cell:nth-child(8n) { border-right: none; }
 .day-cell.other-month { background: var(--surface2); }
 .day-cell.is-weekend:not(.other-month) { background: #FAFFFE; }
 .day-cell.is-today .day-num-inner {
   background: var(--brand); color: #fff; border-radius: 50%;
   width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+}
+.pool-col {
+  border-right: 2px solid var(--border2); background: #F8FAFC;
+  padding: 6px 5px; min-height: 116px;
+  border-bottom: 1px solid var(--border);
+}
+.pool-col-names {
+  font-size: 9px; color: #475569; line-height: 1.7; font-weight: 500;
+}
+.pool-col-count {
+  font-size: 9px; color: var(--brand); font-weight: 700; margin-bottom: 3px;
 }
 .day-num { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 4px; height: 22px; display: flex; align-items: center; }
 .day-num-inner { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
@@ -524,6 +540,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <button class="filter-tab f-scheduled" onclick="setTab(this,'Scheduled')">Scheduled</button>
       <button class="filter-tab f-confirmed" onclick="setTab(this,'Confirmed')">Confirmed</button>
       <button class="filter-tab f-completed" onclick="setTab(this,'Completed')">Completed</button>
+      <button class="filter-tab f-myevents" id="myEventsTab" onclick="setTab(this,'myevents')" style="display:none">My events</button>
       <div class="filter-spacer"></div>
       <div class="legend">
         <div class="leg"><div class="leg-dot" style="background:#CBD5E1"></div> Provider pool</div>
@@ -537,9 +554,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div id="monthView">
       <div class="cal-wrap">
         <div class="cal-grid" id="calGrid">
-          <div class="cal-hdr">Sun</div><div class="cal-hdr">Mon</div><div class="cal-hdr">Tue</div>
+          <div class="cal-hdr cal-hdr-pool">Pool</div>
+          <div class="cal-hdr">Mon</div><div class="cal-hdr">Tue</div>
           <div class="cal-hdr">Wed</div><div class="cal-hdr">Thu</div><div class="cal-hdr">Fri</div>
-          <div class="cal-hdr">Sat</div>
+          <div class="cal-hdr is-weekend-hdr">Sat</div><div class="cal-hdr is-weekend-hdr">Sun</div>
         </div>
       </div>
     </div>
@@ -723,19 +741,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-label">Coordinator checklist</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-contact" style="width:15px;height:15px;accent-color:var(--brand)"> Initial contact sent
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-reminder" style="width:15px;height:15px;accent-color:var(--brand)"> Week-of reminder
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-followup" style="width:15px;height:15px;accent-color:var(--brand)"> Follow-up email sent
+          <input type="checkbox" id="f-followup" style="width:15px;height:15px;accent-color:var(--brand)"> Event coordinator sent
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="f-photo" style="width:15px;height:15px;accent-color:var(--brand)"> Social photo captured
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-nextev" style="width:15px;height:15px;accent-color:var(--brand)"> Follow-up event scheduled
+          <input type="checkbox" id="f-weekcoord" style="width:15px;height:15px;accent-color:var(--brand)"> Week of email to coordinator sent
         </label>
       </div>
     </div>
@@ -922,6 +934,8 @@ async function onSignedIn() {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('userName').textContent = name.split(' ')[0];
   document.getElementById('userAvatar').textContent = initials;
+  // Always show My events tab
+  document.getElementById('myEventsTab').style.display = 'inline-flex';
 
   await loadEvents();
 }
@@ -943,7 +957,6 @@ async function spGetAll() {
   setLoading(false);
   // Debug: log first item fields so we can see exact internal names
   if (data.value && data.value.length > 0) {
-    console.log('CE Events — first item raw fields:', JSON.stringify(data.value[0].fields, null, 2));
   }
   return data.value || [];
 }
@@ -951,14 +964,12 @@ async function spGetAll() {
 async function spCreate(fields) {
   const token = await getToken();
   const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items`;
-  console.log('SP CREATE payload:', JSON.stringify(fields, null, 2));
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields })
   });
   const responseText = await res.text();
-  console.log('SP CREATE response:', res.status, responseText);
   if (!res.ok) throw new Error(`Create failed: ${responseText}`);
   return JSON.parse(responseText);
 }
@@ -966,14 +977,12 @@ async function spCreate(fields) {
 async function spUpdate(itemId, fields) {
   const token = await getToken();
   const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${LIST_ID}/items/${itemId}/fields`;
-  console.log('SP UPDATE payload:', JSON.stringify(fields, null, 2));
   const res = await fetch(url, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(fields)
   });
   const responseText = await res.text();
-  console.log('SP UPDATE response:', res.status, responseText);
   if (!res.ok) throw new Error(`Update failed: ${responseText}`);
   return JSON.parse(responseText);
 }
@@ -1049,11 +1058,12 @@ function spItemToEvent(item) {
     provider,
     providers,
     ceTeam,
-    contact:   f.Initialcontactemailsent || '',
-    reminder:  f.Weekofreminder          || '',
+    contact:   '',
+    reminder:  '',
     followup:  f.Followupemailsent       || '',
     photo:     f.SocialPhotoCaptured     || '',
-    nextEvent: f.FollowUpEventScheduled  || '',
+    nextEvent: '',
+    weekCoord: f.CE_WeekOfCoordinatorSent ? 'yes' : '',
     confDate:  f.CE_ConfirmationSentDate || '',
   };
 }
@@ -1150,11 +1160,8 @@ function eventToSpFields(formData) {
     Address:                 combinedAddress,
     Otherdetails:            formData.notes       || '',
     EventScheduledBy:        formData.schedBy     || '',
-    Initialcontactemailsent: choiceVal(formData.contact,   'yes'),
-    Weekofreminder:          choiceVal(formData.reminder,  'yes'),
-    Followupemailsent:       choiceVal(formData.followup,  'yes'),
-    SocialPhotoCaptured:     choiceVal(formData.photo,     'yes'),
-    FollowUpEventScheduled:  choiceVal(formData.nextEvent, 'Yes'),
+    Followupemailsent:       choiceVal(formData.followup,   'yes'),
+    SocialPhotoCaptured:     choiceVal(formData.photo,      'yes'),
   };
   if (formData.date) {
     const timeStr = formData.time || '00:00';
@@ -1242,21 +1249,31 @@ function updateStats() {
 
 function filteredEvents() {
   if (curView === 'week') {
-    // Week view: filter to current week regardless of month
     const weekEnd = new Date(curWeekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
     weekEnd.setHours(23,59,59,999);
     return events.filter(e => {
       const d = new Date(e.date + 'T12:00:00');
-      return d >= curWeekStart && d <= weekEnd && (curTab === 'all' || e.status === curTab);
+      const inTab = curTab === 'all' || e.status === curTab ||
+        (curTab === 'myevents' && isMyEvent(e));
+      return d >= curWeekStart && d <= weekEnd && inTab;
     });
   }
   return events.filter(e => {
     const d = new Date(e.date + 'T12:00:00');
     const inMonth = d.getMonth() === curMonth && d.getFullYear() === curYear;
-    const matchTab = curTab === 'all' || e.status === curTab;
+    const matchTab = curTab === 'all' || e.status === curTab ||
+      (curTab === 'myevents' && isMyEvent(e));
     return inMonth && matchTab;
   });
+}
+
+function isMyEvent(ev) {
+  const email = currentUser.email.toLowerCase();
+  const provEmail = ev.provider ? ev.provider.toLowerCase() : '';
+  const provsEmail = ev.providers ? ev.providers.toLowerCase() : '';
+  const ceEmail = ev.ceTeam ? ev.ceTeam.toLowerCase() : '';
+  return provEmail.includes(email) || provsEmail.includes(email) || ceEmail.includes(email);
 }
 
 function renderWeek() {
@@ -1386,101 +1403,121 @@ function renderCalendar() {
   grid.innerHTML = '';
   hdrs.forEach(h => grid.appendChild(h));
 
-  const first    = new Date(curYear, curMonth, 1);
-  const startDay = first.getDay();
-  const daysInM  = new Date(curYear, curMonth + 1, 0).getDate();
-  const prevDays = new Date(curYear, curMonth, 0).getDate();
-  const today    = new Date();
-  const total    = Math.ceil((startDay + daysInM) / 7) * 7;
+  const today = new Date();
 
-  // Build event map
+  // Monday-start: get day of week where Mon=0, Tue=1 ... Sun=6
+  const first = new Date(curYear, curMonth, 1);
+  const firstDow = first.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  const startOffset = firstDow === 0 ? 6 : firstDow - 1; // days before first Mon
+  const daysInM = new Date(curYear, curMonth + 1, 0).getDate();
+  const prevDays = new Date(curYear, curMonth, 0).getDate();
+  const totalCells = Math.ceil((startOffset + daysInM) / 7) * 7;
+
+  // Build event map by date
   const evMap = {};
   filteredEvents().forEach(e => {
-    const d = new Date(e.date + 'T12:00:00');
-    const k = d.getDate();
-    if (!evMap[k]) evMap[k] = [];
-    evMap[k].push(e);
+    if (!evMap[e.date]) evMap[e.date] = [];
+    evMap[e.date].push(e);
   });
 
-  for (let i = 0; i < total; i++) {
-    const cell = document.createElement('div');
-    cell.className = 'day-cell';
-    const dow = i % 7;
-    let dayNum, dateStr, other = false;
+  // Build week rows — each row is Mon-Sun (7 days)
+  const totalRows = totalCells / 7;
 
-    if (i < startDay) {
-      dayNum = prevDays - startDay + i + 1;
-      const pm = curMonth === 0 ? 11 : curMonth - 1;
-      const py = curMonth === 0 ? curYear - 1 : curYear;
-      dateStr = `${py}-${String(pm+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
-      other = true;
-    } else if (i >= startDay + daysInM) {
-      dayNum = i - startDay - daysInM + 1;
-      const nm = curMonth === 11 ? 0 : curMonth + 1;
-      const ny = curMonth === 11 ? curYear + 1 : curYear;
-      dateStr = `${ny}-${String(nm+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
-      other = true;
-    } else {
-      dayNum = i - startDay + 1;
-      dateStr = `${curYear}-${String(curMonth+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+  for (let row = 0; row < totalRows; row++) {
+    // Pool column — get the Saturday of this week
+    const poolCell = document.createElement('div');
+    poolCell.className = 'pool-col';
+
+    // Find Saturday date for this row
+    const satOffset = row * 7 + (6 - startOffset); // offset to Saturday in this row
+    let satDay = satOffset - startOffset + 1;
+    let satDateStr = '';
+    if (satDay >= 1 && satDay <= daysInM) {
+      satDateStr = `${curYear}-${String(curMonth+1).padStart(2,'0')}-${String(satDay).padStart(2,'0')}`;
     }
-
-    if (other) cell.classList.add('other-month');
-    if (dow === 0 || dow === 6) cell.classList.add('is-weekend');
-    if (!other && dayNum === today.getDate() && curMonth === today.getMonth() && curYear === today.getFullYear()) {
-      cell.classList.add('is-today');
+    const pool = satDateStr ? getWeekendPool(satDateStr) : [];
+    if (pool.length) {
+      const countDiv = document.createElement('div');
+      countDiv.className = 'pool-col-count';
+      countDiv.textContent = `${pool.length} providers`;
+      poolCell.appendChild(countDiv);
+      const namesDiv = document.createElement('div');
+      namesDiv.className = 'pool-col-names';
+      namesDiv.title = pool.join(', ');
+      namesDiv.textContent = pool.slice(0, 6).join('\n') + (pool.length > 6 ? `\n+${pool.length - 6}` : '');
+      poolCell.appendChild(namesDiv);
     }
+    grid.appendChild(poolCell);
 
-    // Day number
-    const numDiv = document.createElement('div');
-    numDiv.className = 'day-num';
-    numDiv.innerHTML = `<div class="day-num-inner">${dayNum}</div>`;
-    cell.appendChild(numDiv);
+    // 7 day cells: Mon through Sun
+    for (let col = 0; col < 7; col++) {
+      const cellIdx = row * 7 + col;
+      const dayOffset = cellIdx - startOffset;
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
 
-    if (!other) {
-      // Holiday
-      if (HOLIDAYS[dateStr]) {
-        const hb = document.createElement('div');
-        hb.className = 'holiday-tag';
-        hb.textContent = HOLIDAYS[dateStr];
-        cell.appendChild(hb);
+      let dayNum, dateStr, other = false;
+      const isWeekend = col >= 5; // Sat=5, Sun=6 in Mon-start
+
+      if (dayOffset < 0) {
+        dayNum = prevDays + dayOffset + 1;
+        const pm = curMonth === 0 ? 11 : curMonth - 1;
+        const py = curMonth === 0 ? curYear - 1 : curYear;
+        dateStr = `${py}-${String(pm+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+        other = true;
+      } else if (dayOffset >= daysInM) {
+        dayNum = dayOffset - daysInM + 1;
+        const nm = curMonth === 11 ? 0 : curMonth + 1;
+        const ny = curMonth === 11 ? curYear + 1 : curYear;
+        dateStr = `${ny}-${String(nm+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+        other = true;
+      } else {
+        dayNum = dayOffset + 1;
+        dateStr = `${curYear}-${String(curMonth+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
       }
-      // Weekend pool strip
-      if (dow === 0 || dow === 6) {
-        const pool = getWeekendPool(dateStr);
-        if (pool.length) {
-          const strip = document.createElement('div');
-          strip.className = 'pool-strip';
-          strip.title = 'Weekend pool: ' + pool.join(', ');
-          strip.textContent = pool.slice(0, 3).join(', ') + (pool.length > 3 ? ` +${pool.length - 3}` : '');
-          cell.appendChild(strip);
+
+      if (other) cell.classList.add('other-month');
+      if (isWeekend) cell.classList.add('is-weekend');
+      if (!other && dayNum === today.getDate() && curMonth === today.getMonth() && curYear === today.getFullYear()) {
+        cell.classList.add('is-today');
+      }
+
+      const numDiv = document.createElement('div');
+      numDiv.className = 'day-num';
+      numDiv.innerHTML = `<div class="day-num-inner">${dayNum}</div>`;
+      cell.appendChild(numDiv);
+
+      if (!other) {
+        if (HOLIDAYS[dateStr]) {
+          const hb = document.createElement('div');
+          hb.className = 'holiday-tag';
+          hb.textContent = HOLIDAYS[dateStr];
+          cell.appendChild(hb);
+        }
+        const dayEvs = evMap[dateStr] || [];
+        const MAX_VISIBLE = 3;
+        dayEvs.slice(0, MAX_VISIBLE).forEach(ev => {
+          const chip = document.createElement('div');
+          chip.className = `ev-chip s-${ev.status}`;
+          const t = ev.timeRaw ? new Date(ev.timeRaw).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true}) : '';
+          chip.textContent = (t ? t + ' ' : '') + ev.title;
+          chip.title = ev.title;
+          chip.onclick = () => openDetailModal(ev.id);
+          cell.appendChild(chip);
+        });
+        if (dayEvs.length > MAX_VISIBLE) {
+          const more = document.createElement('div');
+          more.className = 'more-chip';
+          more.textContent = `+${dayEvs.length - MAX_VISIBLE} more`;
+          more.onclick = () => {
+            curWeekStart = getWeekStart(new Date(curYear, curMonth, dayNum));
+            setView('week');
+          };
+          cell.appendChild(more);
         }
       }
-      // Events
-      const dayEvs = evMap[dayNum] || [];
-      const MAX_VISIBLE = 3;
-      dayEvs.slice(0, MAX_VISIBLE).forEach(ev => {
-        const chip = document.createElement('div');
-        chip.className = `ev-chip s-${ev.status}`;
-        const t = ev.timeRaw ? new Date(ev.timeRaw).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true}) : '';
-        chip.textContent = (t ? t + ' ' : '') + ev.title;
-        chip.title = ev.title;
-        chip.onclick = () => openDetailModal(ev.id);
-        cell.appendChild(chip);
-      });
-      if (dayEvs.length > MAX_VISIBLE) {
-        const more = document.createElement('div');
-        more.className = 'more-chip';
-        more.textContent = `+${dayEvs.length - MAX_VISIBLE} more`;
-        more.onclick = () => {
-          // Switch to week view centered on this day
-          curWeekStart = getWeekStart(new Date(curYear, curMonth, dayNum));
-          setView('week');
-        };
-        cell.appendChild(more);
-      }
+      grid.appendChild(cell);
     }
-    grid.appendChild(cell);
   }
   document.getElementById('monthLabel').textContent = `${MONTHS[curMonth]} ${curYear}`;
 }
@@ -1577,11 +1614,9 @@ function openDetailModal(id) {
 
   // Checklist
   const checks = [
-    { label: 'Initial contact sent', val: ev.contact },
-    { label: 'Week-of reminder',     val: ev.reminder },
-    { label: 'Follow-up email sent', val: ev.followup },
-    { label: 'Social photo captured',val: ev.photo    },
-    { label: 'Follow-up event',      val: ev.nextEvent},
+    { label: 'Event coordinator sent', val: ev.followup },
+    { label: 'Social photo captured',  val: ev.photo    },
+    { label: 'Week of email to coordinator sent', val: ev.weekCoord },
   ];
   document.getElementById('dm-checklist').innerHTML = checks.map(c => {
     const done = c.val === 'yes' || c.val === 'Yes';
@@ -1635,11 +1670,9 @@ function openEditFromDetail() {
   document.getElementById('f-schedby').value  = ev.schedBy || '';
   document.getElementById('f-notes').value    = ev.notes || '';
   document.getElementById('f-status').value   = ev.status || 'Scheduled';
-  document.getElementById('f-contact').checked = ev.contact === 'yes';
-  document.getElementById('f-reminder').checked= ev.reminder === 'yes';
-  document.getElementById('f-followup').checked= ev.followup === 'yes';
-  document.getElementById('f-photo').checked   = ev.photo === 'yes';
-  document.getElementById('f-nextev').checked  = ev.nextEvent === 'Yes';
+  document.getElementById('f-followup').checked = ev.followup === 'yes';
+  document.getElementById('f-photo').checked    = ev.photo === 'yes';
+  document.getElementById('f-weekcoord').checked = ev.weekCoord === 'yes';
 
   if (ev.timeRaw) {
     const t = new Date(ev.timeRaw);
@@ -1672,7 +1705,7 @@ function clearForm() {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-status').value = 'Scheduled';
-  ['f-contact','f-reminder','f-followup','f-photo','f-nextev'].forEach(id => {
+  ['f-followup','f-photo','f-weekcoord'].forEach(id => {
     document.getElementById(id).checked = false;
   });
   document.getElementById('f-provider-hint').textContent = '';
@@ -1700,11 +1733,9 @@ async function saveEvent() {
     ceTeam:   document.getElementById('f-ceteam').value.trim(),
     schedBy:  document.getElementById('f-schedby').value.trim(),
     notes:    document.getElementById('f-notes').value.trim(),
-    contact:  document.getElementById('f-contact').checked,
-    reminder: document.getElementById('f-reminder').checked,
     followup: document.getElementById('f-followup').checked,
     photo:    document.getElementById('f-photo').checked,
-    nextEvent:document.getElementById('f-nextev').checked,
+    weekCoord:document.getElementById('f-weekcoord').checked,
   };
 
   try {
