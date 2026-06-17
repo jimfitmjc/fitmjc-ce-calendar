@@ -175,24 +175,35 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   border-right: 2px solid var(--border2); background: #F8FAFC;
   padding: 6px 5px; min-height: 116px;
   border-bottom: 1px solid var(--border);
+  position: relative; cursor: pointer;
 }
+.pool-col:hover { background: #F1F5F9; }
 .pool-col-names {
   font-size: 9px; color: #475569; line-height: 1.7; font-weight: 500;
 }
 .pool-col-count {
   font-size: 9px; color: var(--brand); font-weight: 700; margin-bottom: 3px;
 }
+.pool-popup {
+  display: none; position: absolute; left: 86px; top: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+  padding: 10px 12px; min-width: 160px; max-width: 220px;
+}
+.pool-col:hover .pool-popup { display: block; }
+.pool-popup-title {
+  font-size: 10px; font-weight: 700; color: var(--brand);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px;
+  padding-bottom: 5px; border-bottom: 1px solid var(--border);
+}
+.pool-popup-names {
+  font-size: 12px; color: var(--text1); line-height: 1.9;
+}
 .day-num { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 4px; height: 22px; display: flex; align-items: center; }
 .day-num-inner { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
 .holiday-tag {
   display: inline-block; font-size: 9px; background: #FEF9C3; color: #854D0E;
   border-radius: 3px; padding: 1px 4px; font-weight: 600; margin-bottom: 3px;
-}
-.pool-strip {
-  background: #F1F5F9; border-radius: 3px; padding: 2px 5px;
-  font-size: 9px; color: #475569; margin-bottom: 3px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600;
-  cursor: default; border-left: 2px solid #CBD5E1;
 }
 .ev-chip {
   border-radius: 3px; padding: 2px 5px; font-size: 10px; margin-bottom: 2px;
@@ -646,6 +657,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="notes-box" id="dm-notes"></div>
     </div>
 
+    <!-- Coordinator contact -->
+    <div class="modal-section" id="dm-coordcontact-section">
+      <div class="section-label"><i class="ti ti-phone"></i> Coordinator contact</div>
+      <div class="notes-box" id="dm-coordcontact"></div>
+    </div>
+
+    <!-- Event log -->
+    <div class="modal-section" id="dm-eventlog-section">
+      <div class="section-label"><i class="ti ti-history"></i> Automation log</div>
+      <div class="notes-box" id="dm-eventlog" style="font-size:11px;white-space:pre-line;color:var(--text2)"></div>
+    </div>
+
   </div>
   <div class="modal-foot">
     <div class="foot-status" id="dm-footstatus"></div>
@@ -696,6 +719,21 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
           <option value="Confirmed">Confirmed</option>
           <option value="Completed">Completed</option>
         </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Event category <span class="required">*</span></label>
+        <select class="form-select" id="f-category">
+          <option value="Community Event">Community Event</option>
+          <option value="Physician Meeting">Physician Meeting</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Coordinator contact</label>
+        <input type="text" class="form-input" id="f-coordcontact" placeholder="Name · phone · email">
+        <div class="form-hint">Shown in all automated emails to providers</div>
       </div>
     </div>
 
@@ -772,20 +810,97 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 'use strict';
 
 // ── CONSTANTS ─────────────────────────────────────────────
-const TENANT_ID  = 'a945d7c0-1b73-4396-a779-5669d97573b3';
-const CLIENT_ID  = '9c9b7df5-582b-4a09-bdd2-d174fa1a4a87';
-const SP_SITE_ID = 'netorg8433049.sharepoint.com,b0aa2d71-3fcf-4763-95d4-b9a2b64a3c83,5d153380-bb8b-4981-995b-042a2dfd3fb0';
-const LIST_ID    = '30E7FF98-9E23-4A67-853A-6CFDBC254B9F';
-const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
-const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/\/$/, '');
+const TENANT_ID               = 'a945d7c0-1b73-4396-a779-5669d97573b3';
+const CLIENT_ID               = '9c9b7df5-582b-4a09-bdd2-d174fa1a4a87';
+const SP_SITE_ID              = 'netorg8433049.sharepoint.com,b0aa2d71-3fcf-4763-95d4-b9a2b64a3c83,5d153380-bb8b-4981-995b-042a2dfd3fb0';
+const LIST_ID                 = '30E7FF98-9E23-4A67-853A-6CFDBC254B9F';
+const CE_CONFIRMATIONS_LIST_ID = '429d21b9-9561-4343-8d03-c7c47ee4adac';
+const CE_PROVIDERS_LIST_ID    = '0f9d79ab-02d2-4458-8b03-4fd4c8136537';
+const CE_EQUIPMENT_LIST_ID    = '56c52800-6963-4ec2-b301-4c737c54a387';
+const GRAPH_BASE              = 'https://graph.microsoft.com/v1.0';
+const REDIRECT_URI            = window.location.origin + window.location.pathname.replace(/\/$/, '');
 
-// Role arrays — add emails as team grows
+// CE team emails — editors/managers
 const CE_TEAM_EMAILS = [
   'krista@fitmjc.com','krista.schoutko@fitmjc.com',
   'winnie@fitmjc.com','winnie.wilson@fitmjc.com',
   'peyton@fitmjc.com','peyton.brown@fitmjc.com',
   'jim@fitmjc.com','jim.heatherman@fitmjc.com',
 ];
+
+// Full provider roster from CE Providers list
+// Format: { name, email, cdEmail, location }
+const PROVIDER_ROSTER = [
+  {name:'Matthew Lane',email:'matt@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Jim Heatherman',email:'jim@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Chad Barnes',email:'drbarnes@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Dilyn Schooley',email:'dilyn@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Matthew Cummings',email:'mattc@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Michael Allison',email:'michael@fitmjc.com',cdEmail:'skylar@fitmjc.com',location:'Overland Park'},
+  {name:'Alexander Beltrame',email:'alexb@fitmjc.com',cdEmail:'alexb@fitmjc.com',location:'Iowa'},
+  {name:'Aaron Holman',email:'aaron@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Reid Williams',email:'reid@fitmjc.com',cdEmail:'reid@fitmjc.com',location:'Paola'},
+  {name:'Davis Cantwell',email:'davis@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Matthew Dobratz',email:'matthew@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'James Kase',email:'jimmykase@fitmjc.com',cdEmail:'jimmykase@fitmjc.com',location:'KCK'},
+  {name:'Sean Stockwell',email:'sean@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Ryan Macan',email:'ryan@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Cameron Snyder',email:'cameron@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Lindsey Allen',email:'lindsey@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Joseph Burbee',email:'joe@fitmjc.com',cdEmail:'reid@fitmjc.com',location:'Paola'},
+  {name:'Michael Cantrell',email:'michaelc@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Nathaniel Greenwood',email:'nate@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Megan Heintz',email:'meganh@fitmjc.com',cdEmail:'meganh@fitmjc.com',location:'Raymore'},
+  {name:'Rustin Hiebert',email:'rustin@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Adam Hutchison',email:'adam@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Bridgette Johnston',email:'bridgette@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Aaron Martin',email:'aaronm@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Erica Ramos',email:'erica@fitmjc.com',cdEmail:'jimmykase@fitmjc.com',location:'KCK'},
+  {name:'Aidan Robidoux',email:'aidan@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Theo Sheridan',email:'theo@fitmjc.com',cdEmail:'theo@fitmjc.com',location:'Crossroads'},
+  {name:'Korbyn Steadman',email:'korbyn@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Christian Wiltse',email:'christian@fitmjc.com',cdEmail:'skylar@fitmjc.com',location:'Overland Park'},
+  {name:'Samantha Nash',email:'sami@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Dace Ball',email:'dace@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Connor McDermott',email:'connorm@fitmjc.com',cdEmail:'theo@fitmjc.com',location:'Crossroads'},
+  {name:'Skylar Dailey',email:'skylar@fitmjc.com',cdEmail:'skylar@fitmjc.com',location:'Overland Park'},
+  {name:'Tyler LaPlante',email:'tylerlaplante@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Natalie Love',email:'natalie@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Anne Moore',email:'anne@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Hayden Olson',email:'hayden@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Jennifer Mattson',email:'jennifer@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Madison Baldwin',email:'madi@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Josh Smith',email:'joshsmith@fitmjc.com',cdEmail:'theo@fitmjc.com',location:'Crossroads'},
+  {name:'Taylor Ballantyne',email:'taylor.ballantyne@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Chris Robinson',email:'chris.robinson@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Maggie Flynn',email:'maggie@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Stephanie Papik',email:'stephanie.papik@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Matt Jenkins',email:'mattjenkins@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Emily Thorn',email:'emily.thorn@fitmjc.com',cdEmail:'theo@fitmjc.com',location:'Crossroads'},
+  {name:'Elijah Hay',email:'elijah.hay@fitmjc.com',cdEmail:'elijah.hay@fitmjc.com',location:'Liberty'},
+  {name:'Alex Stanek',email:'alex.stanek@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Patrick Gaffney',email:'patrick.gaffney@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Riley Hilger',email:'riley.hilger@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Rory Stewart',email:'rory.stewart@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Spencer Allacher',email:'Spencer.Allacher@fitmjc.com',cdEmail:'meganh@fitmjc.com',location:'Raymore'},
+  {name:'Jaimison Peckham',email:'jaimison.peckham@fitmjc.com',cdEmail:'elijah.hay@fitmjc.com',location:'Liberty'},
+  {name:'Jessica Ward',email:'Jessica.ward@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
+  {name:'Kysn Paepke',email:'kysn.paepke@fitmjc.com',cdEmail:'ryan@fitmjc.com',location:'Blue Valley'},
+  {name:'Katelyn Juskiv',email:'katelyn.juskiv@fitmjc.com',cdEmail:'meganh@fitmjc.com',location:'Raymore'},
+  {name:'Maya Gallagher',email:'maya.gallagher@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Collin Oglesby',email:'collin.oglesby@fitmjc.com',cdEmail:'skylar@fitmjc.com',location:'Overland Park'},
+  {name:'Jaeden Waschbusch',email:'jaeden.waschbusch@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Camden Commerford',email:'camden.commerford@fitmjc.com',cdEmail:'aaron@fitmjc.com',location:'Lees Summit'},
+  {name:'Matt Davies',email:'matt.davies@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Erika Landes',email:'erika.landes@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Tyrus Fort',email:'Tyrus.fort@fitmjc.com',cdEmail:'davis@fitmjc.com',location:'Olathe'},
+  {name:'Katie Riedell',email:'katie.riedell@fitmjc.com',cdEmail:'meganh@fitmjc.com',location:'Raymore'},
+  {name:'Leah Findley',email:'leah.findley@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+  {name:'Garrett Rolofson',email:'garrett.rolofson@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
+];
+
+// Derived full name list for UI
+const ALL_STAFF = PROVIDER_ROSTER.map(p => p.name);
 
 // Provider weekend pool from 2026 Excel schedule (Saturday = week key)
 const WEEKEND_POOLS = {
@@ -812,12 +927,6 @@ const WEEKEND_POOLS = {
   '2026-12-05':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Riley'],
   '2026-12-19':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Skylar','Jess'],
 };
-
-const ALL_STAFF = ['Aaron','Aidan','Andy','Austin','Cameron','Chris','Christian','Collin','Connor',
-  'Dace','Davies','Davis','Dilyn','Eli','Emily','Erica','Hayden','Jaeden','Jaimison','Jenkins',
-  'Jenn','Jess','Jimmy','Joe','Josh','Katelyn','Katie','Kenzie','Korbyn','Kysn','Leah','Lindsey',
-  'Maggie','Madi','Matt V','Maya','Megan','Natalie','Reid','Riley','Rory','Rustin','Ryan','Skylar',
-  'Spencer','Stephanie','Taylor','Theo','Tyler'];
 
 const CE_TEAM_MEMBERS = [
   { name: 'Krista Schoutko', role: 'CE Director' },
@@ -853,11 +962,13 @@ let curTab   = 'all';
 let editingEventId = null;
 let detailEventId  = null;
 
-// Week view state — Sunday of current week
+// Week view state — Monday of current week
 function getWeekStart(date) {
   const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
   d.setHours(0,0,0,0);
+  const dow = d.getDay();
+  // Monday = 0 offset, Sunday = -6 offset
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
   return d;
 }
 let curWeekStart = getWeekStart(new Date());
@@ -1052,8 +1163,9 @@ function spItemToEvent(item) {
     notes,
     schedBy:   f.EventScheduledBy || '',
     status:    f.CE_Status || 'Scheduled',
-    // Provider single — LookupId only from Graph; store raw for now
-    // will be resolved via Providers array or direct name lookup
+    category:  f.CE_EventCategory || 'Community Event',
+    coordContact: f.CE_CoordinatorContact || '',
+    eventLog:  f.CE_EventLog || '',
     providerLookupId: f.ProviderLookupId || '',
     provider,
     providers,
@@ -1157,9 +1269,11 @@ function eventToSpFields(formData) {
   const fields = {
     Title:                   formData.title,
     CE_Status:               formData.status,
+    CE_EventCategory:        formData.category    || 'Community Event',
+    CE_CoordinatorContact:   formData.coordContact || '',
     Address:                 combinedAddress,
-    Otherdetails:            formData.notes       || '',
-    EventScheduledBy:        formData.schedBy     || '',
+    Otherdetails:            formData.notes        || '',
+    EventScheduledBy:        formData.schedBy      || '',
     Followupemailsent:       choiceVal(formData.followup,   'yes'),
     SocialPhotoCaptured:     choiceVal(formData.photo,      'yes'),
   };
@@ -1224,7 +1338,36 @@ function getWeekendPool(dateStr) {
   const keys = Object.keys(WEEKEND_POOLS).sort();
   let best = null;
   for (const k of keys) { if (k <= satStr) best = k; }
-  return best ? WEEKEND_POOLS[best] : [];
+  if (!best) return [];
+  // Map first names to full names via PROVIDER_ROSTER
+  return WEEKEND_POOLS[best].map(firstName => {
+    const match = PROVIDER_ROSTER.find(p =>
+      p.name.toLowerCase().startsWith(firstName.toLowerCase()) ||
+      p.name.toLowerCase().includes(' ' + firstName.toLowerCase())
+    );
+    return match ? match.name : firstName;
+  });
+}
+
+// Check if a provider is assigned to another event in the same week
+function isProviderBusyThisWeek(providerName, excludeEventId, dateStr) {
+  if (!providerName || !dateStr) return false;
+  const d = new Date(dateStr + 'T12:00:00');
+  const mon = new Date(d);
+  const dow = d.getDay();
+  mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  mon.setHours(0,0,0,0);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23,59,59,999);
+  const nameLower = providerName.toLowerCase();
+  return events.some(ev => {
+    if (ev.id === excludeEventId) return false;
+    const evDate = new Date(ev.date + 'T12:00:00');
+    if (evDate < mon || evDate > sun) return false;
+    const assigned = [ev.provider, ev.providers].filter(Boolean).join(';').toLowerCase();
+    return assigned.includes(nameLower.split(' ')[0]);
+  });
 }
 
 // ── RENDER ────────────────────────────────────────────────
@@ -1281,13 +1424,16 @@ function renderWeek() {
   const today = new Date();
   today.setHours(0,0,0,0);
 
-  // Build 7 days of the week
+  // Build 7 days Mon-Sun
   const days = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(curWeekStart);
     d.setDate(curWeekStart.getDate() + i);
     days.push(d);
   }
+
+  // isWeekend: Sat=index 5, Sun=index 6 in Mon-start
+  const isWeekendIdx = (i) => i >= 5;
 
   // Update nav label to show week range
   const wStart = days[0];
@@ -1318,7 +1464,7 @@ function renderWeek() {
   html += '<div class="week-hdr-spacer"></div>';
   days.forEach((d, i) => {
     const isToday   = d.getTime() === today.getTime();
-    const isWeekend = i === 0 || i === 6;
+    const isWeekend = i >= 5; // Mon-start: Sat=5, Sun=6
     const numHtml   = isToday
       ? `<div class="week-hdr-num is-today">${d.getDate()}</div>`
       : `<div class="week-hdr-num">${d.getDate()}</div>`;
@@ -1443,9 +1589,13 @@ function renderCalendar() {
       poolCell.appendChild(countDiv);
       const namesDiv = document.createElement('div');
       namesDiv.className = 'pool-col-names';
-      namesDiv.title = pool.join(', ');
-      namesDiv.textContent = pool.slice(0, 6).join('\n') + (pool.length > 6 ? `\n+${pool.length - 6}` : '');
+      namesDiv.textContent = pool.slice(0, 6).map(n => n.split(' ')[0]).join('\n') + (pool.length > 6 ? `\n+${pool.length - 6}` : '');
       poolCell.appendChild(namesDiv);
+      // Hover popup with all names
+      const popup = document.createElement('div');
+      popup.className = 'pool-popup';
+      popup.innerHTML = `<div class="pool-popup-title">Weekend pool · ${pool.length} providers</div><div class="pool-popup-names">${pool.join('<br>')}</div>`;
+      poolCell.appendChild(popup);
     }
     grid.appendChild(poolCell);
 
@@ -1559,14 +1709,17 @@ function openDetailModal(id) {
 
   const d = new Date(ev.date + 'T12:00:00');
   const t = ev.timeRaw ? new Date(ev.timeRaw).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true}) : '';
-
   const statusIcon = {Scheduled:'ti-clock',Confirmed:'ti-circle-check',Completed:'ti-check'}[ev.status] || 'ti-clock';
   const isWeekend  = d.getDay() === 0 || d.getDay() === 6;
+  const catColor   = ev.category === 'Physician Meeting'
+    ? 'background:#F0F9FF;border-color:#BAE6FD;color:#0C4A6E'
+    : 'background:var(--brand-light);border-color:var(--brand-mid);color:var(--brand-dark)';
 
   document.getElementById('dm-meta').innerHTML =
     `<span class="badge badge-${ev.status}"><i class="ti ${statusIcon}" style="font-size:10px"></i> ${ev.status}</span>` +
     `<span class="meta-pill"><i class="ti ti-calendar" style="font-size:11px"></i> ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}</span>` +
     (isWeekend ? `<span class="meta-pill" style="background:var(--brand-light);border-color:var(--brand-mid);color:var(--brand-dark)"><i class="ti ti-sun" style="font-size:11px"></i> Weekend</span>` : '') +
+    `<span class="meta-pill" style="${catColor}"><i class="ti ti-tag" style="font-size:11px"></i> ${ev.category || 'Community Event'}</span>` +
     `<span class="meta-pill"><i class="ti ti-user" style="font-size:11px"></i> By ${ev.schedBy || '—'}</span>`;
 
   // CE Team bar
@@ -1584,17 +1737,31 @@ function openDetailModal(id) {
   document.getElementById('dm-addr').textContent = ev.address && ev.location ? ev.address : '';
   document.getElementById('dm-schedby').textContent = ev.schedBy || '—';
 
-  // Provider tiers
+  // Coordinator contact — show if present
+  const coordEl = document.getElementById('dm-coordcontact');
+  const coordSec = document.getElementById('dm-coordcontact-section');
+  if (coordEl && coordSec) {
+    if (ev.coordContact) { coordEl.textContent = ev.coordContact; coordSec.style.display = 'block'; }
+    else { coordSec.style.display = 'none'; }
+  }
+
+  // Provider tiers with conflict indicator
   const assigned = [ev.provider, ev.providers].filter(Boolean).join('; ').split(';').map(s=>s.trim()).filter(Boolean);
   const pool = getWeekendPool(ev.date);
-  const available = pool.filter(p => !assigned.some(a => a.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(a.split(' ')[0].toLowerCase())));
-  const others = ALL_STAFF.filter(p => !pool.includes(p) && !assigned.some(a => a.toLowerCase().includes(p.toLowerCase())));
+  const available = pool.filter(p => !assigned.some(a =>
+    a.toLowerCase().includes(p.toLowerCase().split(' ')[0]) ||
+    p.toLowerCase().includes(a.toLowerCase().split(' ')[0])
+  ));
+  const others = ALL_STAFF.filter(p => !pool.some(pp =>
+    pp.toLowerCase().includes(p.toLowerCase().split(' ')[0]) ||
+    p.toLowerCase().includes(pp.toLowerCase().split(' ')[0])
+  ) && !assigned.some(a => a.toLowerCase().includes(p.toLowerCase().split(' ')[0])));
 
   function ini(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
   document.getElementById('tcA').textContent = assigned.length + ' provider' + (assigned.length !== 1 ? 's' : '');
   document.getElementById('chipsA').innerHTML = assigned.length
-    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}${ev.status !== 'Completed' ? `<button class="chip-action swap" onclick="showToast('Swap workflow coming in next update','')">⇄ swap</button>` : ''}</span>`).join('')
+    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}${ev.status !== 'Completed' ? `<button class="chip-action swap" onclick="showToast('Swap workflow — Phase 2A','')">⇄ swap</button>` : ''}</span>`).join('')
     : `<span style="font-size:12px;color:var(--text3)">No providers assigned. Add from the pool below.</span>`;
 
   const confirmEl = document.getElementById('confirmMsg');
@@ -1606,11 +1773,20 @@ function openDetailModal(id) {
 
   document.getElementById('tcV').textContent = available.length + ' available';
   document.getElementById('chipsV').innerHTML = available.length
-    ? available.map(p => `<span class="pchip pchip-available"><span class="pav pav-v">${ini(p)}</span>${p}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`).join('')
+    ? available.map(p => {
+        const busy = isProviderBusyThisWeek(p, ev.id, ev.date);
+        const busyBadge = busy ? `<span style="font-size:9px;background:#FEF3E2;color:#B45309;border-radius:3px;padding:1px 4px;margin-left:3px;font-weight:600">busy</span>` : '';
+        const chipStyle = busy ? 'pchip pchip-available' : 'pchip pchip-available';
+        return `<span class="${chipStyle}" style="${busy?'opacity:.7':''}"><span class="pav pav-v">${ini(p)}</span>${p}${busyBadge}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`;
+      }).join('')
     : `<span style="font-size:12px;color:var(--text3)">All pool providers already assigned.</span>`;
 
   document.getElementById('tcO').textContent = others.length + ' staff';
-  document.getElementById('chipsO').innerHTML = others.map(p => `<span class="pchip pchip-other"><span class="pav pav-o">${ini(p)}</span>${p}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`).join('');
+  document.getElementById('chipsO').innerHTML = others.map(p => {
+    const busy = isProviderBusyThisWeek(p, ev.id, ev.date);
+    const busyBadge = busy ? `<span style="font-size:9px;background:#FEF3E2;color:#B45309;border-radius:3px;padding:1px 4px;margin-left:3px;font-weight:600">busy</span>` : '';
+    return `<span class="pchip pchip-other" style="${busy?'opacity:.7':''}"><span class="pav pav-o">${ini(p)}</span>${p}${busyBadge}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`;
+  }).join('');
 
   // Checklist
   const checks = [
@@ -1631,6 +1807,14 @@ function openDetailModal(id) {
   const notesSec = document.getElementById('dm-notes-section');
   if (ev.notes) { notesEl.textContent = ev.notes; notesSec.style.display = 'block'; }
   else { notesSec.style.display = 'none'; }
+
+  // Event log
+  const logEl = document.getElementById('dm-eventlog');
+  const logSec = document.getElementById('dm-eventlog-section');
+  if (logEl && logSec) {
+    if (ev.eventLog) { logEl.textContent = ev.eventLog; logSec.style.display = 'block'; }
+    else { logSec.style.display = 'none'; }
+  }
 
   // Footer
   const fs = document.getElementById('dm-footstatus');
@@ -1670,8 +1854,10 @@ function openEditFromDetail() {
   document.getElementById('f-schedby').value  = ev.schedBy || '';
   document.getElementById('f-notes').value    = ev.notes || '';
   document.getElementById('f-status').value   = ev.status || 'Scheduled';
-  document.getElementById('f-followup').checked = ev.followup === 'yes';
-  document.getElementById('f-photo').checked    = ev.photo === 'yes';
+  document.getElementById('f-category').value    = ev.category || 'Community Event';
+  document.getElementById('f-coordcontact').value= ev.coordContact || '';
+  document.getElementById('f-followup').checked  = ev.followup === 'yes';
+  document.getElementById('f-photo').checked     = ev.photo === 'yes';
   document.getElementById('f-weekcoord').checked = ev.weekCoord === 'yes';
 
   if (ev.timeRaw) {
@@ -1701,10 +1887,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function clearForm() {
-  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-provider','f-providers','f-ceteam','f-schedby','f-notes'].forEach(id => {
+  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-provider','f-providers','f-ceteam','f-schedby','f-notes','f-coordcontact'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-status').value = 'Scheduled';
+  document.getElementById('f-category').value = 'Community Event';
   ['f-followup','f-photo','f-weekcoord'].forEach(id => {
     document.getElementById(id).checked = false;
   });
@@ -1725,8 +1912,10 @@ async function saveEvent() {
     title,
     date,
     time:     document.getElementById('f-time').value,
-    status:   document.getElementById('f-status').value,
-    location: document.getElementById('f-location').value.trim(),
+    status:      document.getElementById('f-status').value,
+    category:    document.getElementById('f-category').value,
+    coordContact:document.getElementById('f-coordcontact').value.trim(),
+    location:    document.getElementById('f-location').value.trim(),
     address:  document.getElementById('f-address').value.trim(),
     provider: document.getElementById('f-provider').value.trim(),
     providers:document.getElementById('f-providers').value.trim(),
