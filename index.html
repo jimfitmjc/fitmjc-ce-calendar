@@ -361,6 +361,42 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .form-hint { font-size: 11px; color: var(--text3); margin-top: 3px; }
 .required { color: #DC2626; }
 
+/* ── PERSON PICKER (typeahead) ──────────────────────────── */
+.picker { position: relative; }
+.picker-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.picker-chips:empty { margin-bottom: 0; }
+.picker-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--brand-light); border: 1px solid var(--brand-mid);
+  color: var(--brand-dark); border-radius: 20px; padding: 3px 6px 3px 10px;
+  font-size: 12px; font-weight: 500;
+}
+.picker-chip-remove {
+  background: none; border: none; color: var(--brand-dark); opacity: .55;
+  font-size: 13px; line-height: 1; padding: 2px; display: flex; border-radius: 50%;
+}
+.picker-chip-remove:hover { opacity: 1; background: rgba(0,0,0,.06); }
+.picker-input-wrap { position: relative; }
+.picker-menu {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); max-height: 220px; overflow-y: auto; z-index: 60;
+}
+.picker-menu.open { display: block; }
+.picker-opt {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  font-size: 13px; color: var(--text1); cursor: pointer;
+}
+.picker-opt:hover, .picker-opt.hl { background: var(--surface2); }
+.picker-opt-av {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--ce-purple-light);
+  color: var(--ce-purple); display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; flex-shrink: 0;
+}
+.picker-opt-name { font-weight: 500; }
+.picker-opt-loc { font-size: 11px; color: var(--text3); margin-left: auto; padding-left: 8px; }
+.picker-empty { padding: 10px; font-size: 12px; color: var(--text3); text-align: center; }
+
 /* ── TOAST ──────────────────────────────────────────────── */
 .toast {
   display: none; position: fixed; bottom: 24px; left: 50%;
@@ -750,18 +786,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Primary provider</label>
-        <input type="text" class="form-input" id="f-provider" placeholder="Full name">
+        <div class="picker" id="picker-provider"></div>
         <div class="form-hint" id="f-provider-hint"></div>
       </div>
       <div class="form-group">
         <label class="form-label">Additional providers</label>
-        <input type="text" class="form-input" id="f-providers" placeholder="Separate with semicolons">
+        <div class="picker" id="picker-providers"></div>
       </div>
     </div>
 
     <div class="form-group">
       <label class="form-label">CE Team member(s)</label>
-      <input type="text" class="form-input" id="f-ceteam" placeholder="e.g. Winnie Wilson; Peyton Brown">
+      <div class="picker" id="picker-ceteam"></div>
     </div>
 
     <div class="form-group">
@@ -934,6 +970,163 @@ const CE_TEAM_MEMBERS = [
   { name: 'Peyton Brown',    role: 'CE Coordinator' },
   { name: 'Tyler Carter',    role: 'CE Coordinator' },
 ];
+
+// ── PERSON PICKER (typeahead, single or multi select) ──────
+// Renders selected people as removable chips + a text input that narrows
+// a dropdown of matching people as you type. Selecting from the list is
+// the only way to add a person, so saved data always maps to a real
+// roster entry instead of free-typed text that may fail to resolve.
+function ini(name) { return (name||'').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
+class PersonPicker {
+  // options: { containerId, people: [{name, loc}], multi: bool, placeholder }
+  constructor(opts) {
+    this.el = document.getElementById(opts.containerId);
+    this.people = opts.people;       // [{name, loc}]
+    this.multi = !!opts.multi;
+    this.placeholder = opts.placeholder || 'Type a name…';
+    this.selected = [];              // array of names (length 1 if !multi)
+    this.highlightIdx = -1;
+    this._build();
+  }
+
+  _build() {
+    this.el.innerHTML = `
+      <div class="picker-chips"></div>
+      <div class="picker-input-wrap">
+        <input type="text" class="form-input" placeholder="${this.placeholder}" autocomplete="off">
+        <div class="picker-menu"></div>
+      </div>`;
+    this.chipsEl = this.el.querySelector('.picker-chips');
+    this.inputEl = this.el.querySelector('input');
+    this.menuEl  = this.el.querySelector('.picker-menu');
+
+    this.inputEl.addEventListener('input', () => this._renderMenu());
+    this.inputEl.addEventListener('focus', () => this._renderMenu());
+    this.inputEl.addEventListener('keydown', (e) => this._onKeydown(e));
+    document.addEventListener('click', (e) => {
+      if (!this.el.contains(e.target)) this._closeMenu();
+    });
+  }
+
+  _matches() {
+    const q = this.inputEl.value.trim().toLowerCase();
+    const avail = this.people.filter(p => !this.selected.includes(p.name));
+    if (!q) return avail.slice(0, 8);
+    return avail.filter(p => p.name.toLowerCase().includes(q)).slice(0, 8);
+  }
+
+  _renderMenu() {
+    if (this.multi === false && this.selected.length) { this._closeMenu(); return; }
+    const matches = this._matches();
+    this.highlightIdx = matches.length ? 0 : -1;
+    if (!matches.length) {
+      this.menuEl.innerHTML = `<div class="picker-empty">No matching people</div>`;
+    } else {
+      this.menuEl.innerHTML = matches.map((p, i) => `
+        <div class="picker-opt${i===0?' hl':''}" data-name="${p.name.replace(/"/g,'&quot;')}">
+          <span class="picker-opt-av">${ini(p.name)}</span>
+          <span class="picker-opt-name">${p.name}</span>
+          ${p.loc ? `<span class="picker-opt-loc">${p.loc}</span>` : ''}
+        </div>`).join('');
+      this.menuEl.querySelectorAll('.picker-opt').forEach(node => {
+        node.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          this._select(node.getAttribute('data-name'));
+        });
+      });
+    }
+    this.menuEl.classList.add('open');
+  }
+
+  _closeMenu() { this.menuEl.classList.remove('open'); this.highlightIdx = -1; }
+
+  _onKeydown(e) {
+    const opts = Array.from(this.menuEl.querySelectorAll('.picker-opt'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!opts.length) return;
+      this.highlightIdx = Math.min(this.highlightIdx + 1, opts.length - 1);
+      opts.forEach((o,i)=>o.classList.toggle('hl', i===this.highlightIdx));
+      opts[this.highlightIdx].scrollIntoView({block:'nearest'});
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!opts.length) return;
+      this.highlightIdx = Math.max(this.highlightIdx - 1, 0);
+      opts.forEach((o,i)=>o.classList.toggle('hl', i===this.highlightIdx));
+      opts[this.highlightIdx].scrollIntoView({block:'nearest'});
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (this.highlightIdx >= 0 && opts[this.highlightIdx]) {
+        this._select(opts[this.highlightIdx].getAttribute('data-name'));
+      }
+    } else if (e.key === 'Escape') {
+      this._closeMenu();
+    } else if (e.key === 'Backspace' && !this.inputEl.value && this.selected.length) {
+      this._remove(this.selected[this.selected.length - 1]);
+    }
+  }
+
+  _select(name) {
+    if (!name) return;
+    if (!this.multi) this.selected = [name];
+    else if (!this.selected.includes(name)) this.selected.push(name);
+    this.inputEl.value = '';
+    this._renderChips();
+    this._closeMenu();
+    if (!this.multi) this.inputEl.blur(); else this.inputEl.focus();
+  }
+
+  _remove(name) {
+    this.selected = this.selected.filter(n => n !== name);
+    this._renderChips();
+  }
+
+  _renderChips() {
+    this.chipsEl.innerHTML = this.selected.map(name => `
+      <span class="picker-chip">
+        <span>${name}</span>
+        <button type="button" class="picker-chip-remove" data-name="${name.replace(/"/g,'&quot;')}">
+          <i class="ti ti-x" style="font-size:11px"></i>
+        </button>
+      </span>`).join('');
+    this.chipsEl.querySelectorAll('.picker-chip-remove').forEach(btn => {
+      btn.addEventListener('click', () => this._remove(btn.getAttribute('data-name')));
+    });
+    this.inputEl.placeholder = (!this.multi && this.selected.length) ? '' : this.placeholder;
+  }
+
+  // Public API
+  setValue(namesOrString) {
+    let names = [];
+    if (Array.isArray(namesOrString)) names = namesOrString;
+    else if (typeof namesOrString === 'string' && namesOrString.trim()) {
+      names = namesOrString.split(';').map(s => s.trim()).filter(Boolean);
+    }
+    // Only keep names that resolve to a real roster entry — best-effort
+    // match for legacy free-typed data saved before the picker existed.
+    this.selected = names.map(n => {
+      const exact = this.people.find(p => p.name.toLowerCase() === n.toLowerCase());
+      if (exact) return exact.name;
+      const partial = this.people.find(p => p.name.toLowerCase().includes(n.toLowerCase().split(' ')[0]));
+      return partial ? partial.name : n; // keep as-is if no roster match found
+    });
+    if (!this.multi) this.selected = this.selected.slice(0, 1);
+    this._renderChips();
+  }
+
+  getValue() { return this.selected.join('; '); }
+  clear() { this.selected = []; this.inputEl.value = ''; this._renderChips(); }
+}
+
+let providerPicker, providersPicker, ceTeamPicker;
+function initPersonPickers() {
+  const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, loc: p.location }));
+  const ceTeamPeople = CE_TEAM_MEMBERS.map(m => ({ name: m.name, loc: m.role }));
+  providerPicker  = new PersonPicker({ containerId: 'picker-provider',  people: rosterPeople, multi: false, placeholder: 'Type a provider name…' });
+  providersPicker = new PersonPicker({ containerId: 'picker-providers', people: rosterPeople, multi: true,  placeholder: 'Type to add a provider…' });
+  ceTeamPicker    = new PersonPicker({ containerId: 'picker-ceteam',    people: ceTeamPeople,  multi: true,  placeholder: 'Type to add a CE team member…' });
+}
 
 const HOLIDAYS = {
   '2026-06-14': 'Flag Day',
@@ -1287,9 +1480,19 @@ function eventToSpFields(formData) {
 async function eventToSpFieldsWithPeople(formData) {
   const fields = eventToSpFields(formData);
 
+  // Prefer resolving by the roster's known email (exact match) over fuzzy
+  // name matching — names selected via the picker always come from
+  // PROVIDER_ROSTER or CE_TEAM_MEMBERS, so this avoids the silent-failure
+  // case where a near-miss name match returns null.
+  const rosterEmailFor = (name) => {
+    const p = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
+    return p ? p.email : null;
+  };
+  const resolvePerson = (name) => resolveUserEmail(rosterEmailFor(name) || name);
+
   // Provider (single) → ProviderLookupId
   if (formData.provider) {
-    const id = await resolveUserEmail(formData.provider);
+    const id = await resolvePerson(formData.provider);
     if (id) fields.ProviderLookupId = id;
     else if (!id) fields.ProviderLookupId = null; // clear if not resolved
   } else {
@@ -1299,7 +1502,7 @@ async function eventToSpFieldsWithPeople(formData) {
   // Providers (multi) → ProvidersLookupId array
   if (formData.providers) {
     const names = formData.providers.split(';').map(s => s.trim()).filter(Boolean);
-    const ids = (await Promise.all(names.map(n => resolveUserEmail(n)))).filter(Boolean);
+    const ids = (await Promise.all(names.map(n => resolvePerson(n)))).filter(Boolean);
     if (ids.length) {
       fields['ProvidersLookupId@odata.type'] = 'Collection(Edm.Int32)';
       fields.ProvidersLookupId = ids;
@@ -1313,7 +1516,7 @@ async function eventToSpFieldsWithPeople(formData) {
   // CETeamMember (multi) → CETeamMemberLookupId array
   if (formData.ceTeam) {
     const names = formData.ceTeam.split(';').map(s => s.trim()).filter(Boolean);
-    const ids = (await Promise.all(names.map(n => resolveUserEmail(n)))).filter(Boolean);
+    const ids = (await Promise.all(names.map(n => resolvePerson(n)))).filter(Boolean);
     if (ids.length) {
       fields['CETeamMemberLookupId@odata.type'] = 'Collection(Edm.Int32)';
       fields.CETeamMemberLookupId = ids;
@@ -1848,9 +2051,9 @@ function openEditFromDetail() {
   document.getElementById('f-date').value     = ev.date;
   document.getElementById('f-location').value = ev.location || '';
   document.getElementById('f-address').value  = ev.address || '';
-  document.getElementById('f-provider').value = ev.provider || '';
-  document.getElementById('f-providers').value= ev.providers || '';
-  document.getElementById('f-ceteam').value   = ev.ceTeam || '';
+  providerPicker.setValue(ev.provider || '');
+  providersPicker.setValue(ev.providers || '');
+  ceTeamPicker.setValue(ev.ceTeam || '');
   document.getElementById('f-schedby').value  = ev.schedBy || '';
   document.getElementById('f-notes').value    = ev.notes || '';
   document.getElementById('f-status').value   = ev.status || 'Scheduled';
@@ -1887,7 +2090,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function clearForm() {
-  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-provider','f-providers','f-ceteam','f-schedby','f-notes','f-coordcontact'].forEach(id => {
+  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-schedby','f-notes','f-coordcontact'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-status').value = 'Scheduled';
@@ -1895,6 +2098,9 @@ function clearForm() {
   ['f-followup','f-photo','f-weekcoord'].forEach(id => {
     document.getElementById(id).checked = false;
   });
+  providerPicker.clear();
+  providersPicker.clear();
+  ceTeamPicker.clear();
   document.getElementById('f-provider-hint').textContent = '';
 }
 
@@ -1917,9 +2123,9 @@ async function saveEvent() {
     coordContact:document.getElementById('f-coordcontact').value.trim(),
     location:    document.getElementById('f-location').value.trim(),
     address:  document.getElementById('f-address').value.trim(),
-    provider: document.getElementById('f-provider').value.trim(),
-    providers:document.getElementById('f-providers').value.trim(),
-    ceTeam:   document.getElementById('f-ceteam').value.trim(),
+    provider: providerPicker.getValue(),
+    providers:providersPicker.getValue(),
+    ceTeam:   ceTeamPicker.getValue(),
     schedBy:  document.getElementById('f-schedby').value.trim(),
     notes:    document.getElementById('f-notes').value.trim(),
     followup: document.getElementById('f-followup').checked,
@@ -2044,6 +2250,7 @@ function showToast(msg, type) {
 });
 
 // ── BOOT ─────────────────────────────────────────────────
+initPersonPickers();
 initAuth();
 </script>
 </body>
