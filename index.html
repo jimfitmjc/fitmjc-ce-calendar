@@ -273,6 +273,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase;
   letter-spacing: .06em; margin-bottom: 8px; display: flex; align-items: center; gap: 5px;
 }
+.dm-edit-link {
+  margin-left: auto; background: none; border: none; color: var(--brand);
+  font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: normal;
+  display: flex; align-items: center; gap: 3px; padding: 2px 4px;
+}
+.dm-edit-link:hover { text-decoration: underline; }
+.dm-edit-link i { font-size: 12px; }
 /* CE Team bar */
 .ce-bar {
   background: var(--ce-purple-light); border: 1px solid var(--ce-purple-mid);
@@ -396,6 +403,40 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .picker-opt-name { font-weight: 500; }
 .picker-opt-loc { font-size: 11px; color: var(--text3); margin-left: auto; padding-left: 8px; }
 .picker-empty { padding: 10px; font-size: 12px; color: var(--text3); text-align: center; }
+
+/* ── PROVIDER ASSIGNMENT PANEL (Edit Event) ─────────────── */
+.assign-panel { display: flex; flex-direction: column; gap: 8px; }
+.assign-block {
+  background: var(--surface2); border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+.assign-block-hdr {
+  display: flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--text2); margin-bottom: 8px;
+}
+.assign-block-hdr i { font-size: 14px; }
+.assign-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.assign-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-radius: 20px; padding: 4px 6px 4px 10px; font-size: 12px; font-weight: 500;
+  border: none; background: none; cursor: pointer;
+}
+.assign-chip-assigned { background: var(--brand-light); color: var(--brand-dark); }
+.assign-chip-assigned:hover { background: var(--brand-mid); }
+.assign-chip-add { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); padding: 4px 10px; }
+.assign-chip-add:hover { border-color: var(--brand); color: var(--brand); }
+.assign-chip-x { font-size: 12px; opacity: .7; }
+.assign-empty { font-size: 12px; color: var(--text3); }
+.assign-note { font-size: 11px; color: var(--text3); font-style: italic; margin-top: 7px; }
+.assign-roster-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: none; border: none; padding: 6px 2px; font-size: 13px; color: var(--text1);
+}
+.assign-roster-toggle:hover { color: var(--brand); }
+.assign-roster-chev { font-size: 13px; color: var(--text3); transition: transform .15s; }
+.assign-roster-chev.open { transform: rotate(180deg); }
+.assign-roster-body { display: none; }
+.assign-roster-body.open { display: block; }
 
 /* ── TOAST ──────────────────────────────────────────────── */
 .toast {
@@ -643,42 +684,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="info-row"><i class="ti ti-user info-icon"></i><div><div class="info-main" id="dm-schedby"></div><div class="info-sub">Scheduled by</div></div></div>
     </div>
 
-    <!-- Provider tiers -->
+    <!-- Provider assignment (read-only summary) -->
     <div class="modal-section">
-      <div class="section-label"><i class="ti ti-stethoscope"></i> Provider assignment</div>
-
-      <div class="tier">
-        <div class="tier-hdr" onclick="toggleTier('tA','chA')">
-          <div class="tier-title"><i class="ti ti-circle-check" style="color:var(--brand);font-size:14px"></i> Assigned to this event</div>
-          <div style="display:flex;align-items:center;gap:8px"><span class="tier-count" id="tcA"></span><i class="ti ti-chevron-down tier-chev open" id="chA"></i></div>
-        </div>
-        <div class="tier-body open" id="tA">
-          <div class="chip-grid" id="chipsA"></div>
-          <div id="confirmMsg"></div>
-        </div>
+      <div class="section-label">
+        <i class="ti ti-stethoscope"></i> Provider assignment
+        <button class="dm-edit-link" onclick="openEditFromDetail()"><i class="ti ti-edit"></i> Edit</button>
       </div>
-
-      <div class="tier">
-        <div class="tier-hdr" onclick="toggleTier('tV','chV')">
-          <div class="tier-title"><i class="ti ti-calendar-event" style="color:var(--conf-bd);font-size:14px"></i> Available this weekend</div>
-          <div style="display:flex;align-items:center;gap:8px"><span class="tier-count" id="tcV"></span><i class="ti ti-chevron-down tier-chev open" id="chV"></i></div>
-        </div>
-        <div class="tier-body open" id="tV">
-          <div class="chip-grid" id="chipsV"></div>
-          <div class="tier-note">Scheduled for this weekend — first call for substitutions</div>
-        </div>
-      </div>
-
-      <div class="tier">
-        <div class="tier-hdr" onclick="toggleTier('tO','chO')">
-          <div class="tier-title"><i class="ti ti-users" style="color:var(--text3);font-size:14px"></i> Full staff roster</div>
-          <div style="display:flex;align-items:center;gap:8px"><span class="tier-count" id="tcO"></span><i class="ti ti-chevron-down tier-chev" id="chO"></i></div>
-        </div>
-        <div class="tier-body" id="tO">
-          <div class="chip-grid" id="chipsO"></div>
-          <div class="tier-note">Not in the weekend rotation — use only if pool providers unavailable</div>
-        </div>
-      </div>
+      <div class="chip-grid" id="chipsA"></div>
+      <div id="confirmMsg"></div>
     </div>
 
     <!-- Checklist -->
@@ -783,16 +796,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <input type="text" class="form-input" id="f-address" placeholder="Street address, City, State">
     </div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Primary provider</label>
-        <div class="picker" id="picker-provider"></div>
-        <div class="form-hint" id="f-provider-hint"></div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Additional providers</label>
-        <div class="picker" id="picker-providers"></div>
-      </div>
+    <div class="form-group">
+      <label class="form-label">Primary provider</label>
+      <div class="picker" id="picker-provider"></div>
+      <div class="form-hint" id="f-provider-hint"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Additional providers</label>
+      <div class="assign-panel" id="assign-panel-providers"></div>
     </div>
 
     <div class="form-group">
@@ -1119,13 +1131,174 @@ class PersonPicker {
   clear() { this.selected = []; this.inputEl.value = ''; this._renderChips(); }
 }
 
+// ── PROVIDER ASSIGNMENT PANEL ───────────────────────────────
+// Same public interface as PersonPicker (setValue/getValue/clear) so it
+// drops into saveEvent / openEditFromDetail / clearForm without changes
+// elsewhere. Adds weekend-pool and full-roster context with one-click
+// add, sourced from the same getWeekendPool()/PROVIDER_ROSTER data the
+// read-only detail view already uses.
+class ProviderAssignPanel {
+  constructor(opts) {
+    this.el = document.getElementById(opts.containerId);
+    this.people = opts.people; // [{name, loc}]
+    this.selected = [];
+    this.dateStr = '';
+    this.rosterOpen = false;
+    this._build();
+  }
+
+  _build() {
+    this.el.innerHTML = `
+      <div class="assign-block">
+        <div class="assign-block-hdr">
+          <i class="ti ti-circle-check" style="color:var(--brand)"></i>
+          Assigned <span class="assign-count"></span>
+        </div>
+        <div class="assign-chips assigned-chips"></div>
+      </div>
+      <div class="assign-block pool-block" style="display:none">
+        <div class="assign-block-hdr">
+          <i class="ti ti-calendar-event" style="color:var(--conf-bd)"></i>
+          Available this weekend <span class="pool-count"></span>
+        </div>
+        <div class="assign-chips pool-chips"></div>
+        <div class="assign-note">Scheduled for this weekend — first call for substitutions</div>
+      </div>
+      <div class="assign-block">
+        <button type="button" class="assign-roster-toggle">
+          <span><i class="ti ti-users" style="color:var(--text3)"></i> Full staff roster <span class="roster-count"></span></span>
+          <i class="ti ti-chevron-down assign-roster-chev"></i>
+        </button>
+        <div class="assign-roster-body">
+          <div class="assign-chips roster-chips"></div>
+          <div class="assign-note">Not in the weekend rotation — use only if pool providers unavailable</div>
+        </div>
+      </div>
+      <div class="picker" id="${this.el.id}-search"></div>`;
+
+    this.assignedChipsEl = this.el.querySelector('.assigned-chips');
+    this.assignCountEl   = this.el.querySelector('.assign-count');
+    this.poolBlockEl     = this.el.querySelector('.pool-block');
+    this.poolChipsEl     = this.el.querySelector('.pool-chips');
+    this.poolCountEl     = this.el.querySelector('.pool-count');
+    this.rosterChipsEl   = this.el.querySelector('.roster-chips');
+    this.rosterCountEl   = this.el.querySelector('.roster-count');
+    this.rosterBodyEl    = this.el.querySelector('.assign-roster-body');
+    this.rosterChevEl    = this.el.querySelector('.assign-roster-chev');
+    this.rosterToggleEl  = this.el.querySelector('.assign-roster-toggle');
+
+    this.rosterToggleEl.addEventListener('click', () => {
+      this.rosterOpen = !this.rosterOpen;
+      this.rosterBodyEl.classList.toggle('open', this.rosterOpen);
+      this.rosterChevEl.classList.toggle('open', this.rosterOpen);
+    });
+
+    this.searchPicker = new PersonPicker({
+      containerId: `${this.el.id}-search`,
+      people: this.people,
+      multi: true,
+      placeholder: 'Type any other name to search…',
+    });
+    // Search picker only feeds selections into this panel — its own
+    // chip row stays empty since selections render in "Assigned" instead.
+    const origSelect = this.searchPicker._select.bind(this.searchPicker);
+    this.searchPicker._select = (name) => {
+      this._add(name);
+      this.searchPicker.inputEl.value = '';
+      this.searchPicker._closeMenu();
+      this.searchPicker.inputEl.focus();
+    };
+
+    this._render();
+  }
+
+  setDate(dateStr) {
+    this.dateStr = dateStr || '';
+    this._render();
+  }
+
+  _add(name) {
+    if (!this.selected.includes(name)) this.selected.push(name);
+    this._render();
+  }
+
+  _remove(name) {
+    this.selected = this.selected.filter(n => n !== name);
+    this._render();
+  }
+
+  _render() {
+    const pool = this.dateStr ? getWeekendPool(this.dateStr) : [];
+    const poolNames = pool.filter(n => this.people.some(p => p.name === n));
+
+    this.assignCountEl.textContent = `(${this.selected.length})`;
+    this.assignedChipsEl.innerHTML = this.selected.length
+      ? this.selected.map(name => `
+          <button type="button" class="assign-chip assign-chip-assigned" data-name="${name.replace(/"/g,'&quot;')}" data-action="remove">
+            ${name} <i class="ti ti-x assign-chip-x"></i>
+          </button>`).join('')
+      : `<span class="assign-empty">No providers assigned yet</span>`;
+
+    const poolAvail = poolNames.filter(n => !this.selected.includes(n));
+    if (poolNames.length) {
+      this.poolBlockEl.style.display = 'block';
+      this.poolCountEl.textContent = `(${poolNames.length})`;
+      this.poolChipsEl.innerHTML = poolAvail.length
+        ? poolAvail.map(name => `
+            <button type="button" class="assign-chip assign-chip-add" data-name="${name.replace(/"/g,'&quot;')}" data-action="add">
+              ${name} <i class="ti ti-plus"></i>
+            </button>`).join('')
+        : `<span class="assign-empty">All weekend providers assigned</span>`;
+    } else {
+      this.poolBlockEl.style.display = 'none';
+    }
+
+    const rosterAvail = this.people
+      .map(p => p.name)
+      .filter(n => !this.selected.includes(n) && !poolNames.includes(n));
+    this.rosterCountEl.textContent = `(${rosterAvail.length})`;
+    this.rosterChipsEl.innerHTML = rosterAvail.length
+      ? rosterAvail.map(name => `
+          <button type="button" class="assign-chip assign-chip-add" data-name="${name.replace(/"/g,'&quot;')}" data-action="add">
+            ${name} <i class="ti ti-plus"></i>
+          </button>`).join('')
+      : `<span class="assign-empty">Everyone is assigned or in the weekend pool</span>`;
+
+    this.el.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const name = btn.getAttribute('data-name');
+        if (btn.getAttribute('data-action') === 'add') this._add(name);
+        else this._remove(name);
+      });
+    });
+  }
+
+  setValue(namesOrString) {
+    let names = [];
+    if (Array.isArray(namesOrString)) names = namesOrString;
+    else if (typeof namesOrString === 'string' && namesOrString.trim()) {
+      names = namesOrString.split(';').map(s => s.trim()).filter(Boolean);
+    }
+    this.selected = names.map(n => {
+      const exact = this.people.find(p => p.name.toLowerCase() === n.toLowerCase());
+      if (exact) return exact.name;
+      const partial = this.people.find(p => p.name.toLowerCase().includes(n.toLowerCase().split(' ')[0]));
+      return partial ? partial.name : n;
+    });
+    this._render();
+  }
+
+  getValue() { return this.selected.join('; '); }
+  clear() { this.selected = []; this.dateStr = ''; this.rosterOpen = false; this._render(); }
+}
+
 let providerPicker, providersPicker, ceTeamPicker;
 function initPersonPickers() {
   const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, loc: p.location }));
   const ceTeamPeople = CE_TEAM_MEMBERS.map(m => ({ name: m.name, loc: m.role }));
-  providerPicker  = new PersonPicker({ containerId: 'picker-provider',  people: rosterPeople, multi: false, placeholder: 'Type a provider name…' });
-  providersPicker = new PersonPicker({ containerId: 'picker-providers', people: rosterPeople, multi: true,  placeholder: 'Type to add a provider…' });
-  ceTeamPicker    = new PersonPicker({ containerId: 'picker-ceteam',    people: ceTeamPeople,  multi: true,  placeholder: 'Type to add a CE team member…' });
+  providerPicker  = new PersonPicker({ containerId: 'picker-provider', people: rosterPeople, multi: false, placeholder: 'Type a provider name…' });
+  providersPicker = new ProviderAssignPanel({ containerId: 'assign-panel-providers', people: rosterPeople });
+  ceTeamPicker    = new PersonPicker({ containerId: 'picker-ceteam', people: ceTeamPeople, multi: true, placeholder: 'Type to add a CE team member…' });
 }
 
 const HOLIDAYS = {
@@ -1948,24 +2121,14 @@ function openDetailModal(id) {
     else { coordSec.style.display = 'none'; }
   }
 
-  // Provider tiers with conflict indicator
+  // Provider assignment — read-only summary, editing happens in Edit Event
   const assigned = [ev.provider, ev.providers].filter(Boolean).join('; ').split(';').map(s=>s.trim()).filter(Boolean);
-  const pool = getWeekendPool(ev.date);
-  const available = pool.filter(p => !assigned.some(a =>
-    a.toLowerCase().includes(p.toLowerCase().split(' ')[0]) ||
-    p.toLowerCase().includes(a.toLowerCase().split(' ')[0])
-  ));
-  const others = ALL_STAFF.filter(p => !pool.some(pp =>
-    pp.toLowerCase().includes(p.toLowerCase().split(' ')[0]) ||
-    p.toLowerCase().includes(pp.toLowerCase().split(' ')[0])
-  ) && !assigned.some(a => a.toLowerCase().includes(p.toLowerCase().split(' ')[0])));
 
   function ini(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
-  document.getElementById('tcA').textContent = assigned.length + ' provider' + (assigned.length !== 1 ? 's' : '');
   document.getElementById('chipsA').innerHTML = assigned.length
-    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}${ev.status !== 'Completed' ? `<button class="chip-action swap" onclick="showToast('Swap workflow — Phase 2A','')">⇄ swap</button>` : ''}</span>`).join('')
-    : `<span style="font-size:12px;color:var(--text3)">No providers assigned. Add from the pool below.</span>`;
+    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}</span>`).join('')
+    : `<span style="font-size:12px;color:var(--text3)">No providers assigned yet.</span>`;
 
   const confirmEl = document.getElementById('confirmMsg');
   if (ev.status === 'Scheduled') {
@@ -1973,23 +2136,6 @@ function openDetailModal(id) {
   } else if (ev.status === 'Confirmed') {
     confirmEl.innerHTML = `<div class="confirm-msg ok"><i class="ti ti-circle-check" style="font-size:13px"></i> All providers confirmed</div>`;
   } else { confirmEl.innerHTML = ''; }
-
-  document.getElementById('tcV').textContent = available.length + ' available';
-  document.getElementById('chipsV').innerHTML = available.length
-    ? available.map(p => {
-        const busy = isProviderBusyThisWeek(p, ev.id, ev.date);
-        const busyBadge = busy ? `<span style="font-size:9px;background:#FEF3E2;color:#B45309;border-radius:3px;padding:1px 4px;margin-left:3px;font-weight:600">busy</span>` : '';
-        const chipStyle = busy ? 'pchip pchip-available' : 'pchip pchip-available';
-        return `<span class="${chipStyle}" style="${busy?'opacity:.7':''}"><span class="pav pav-v">${ini(p)}</span>${p}${busyBadge}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`;
-      }).join('')
-    : `<span style="font-size:12px;color:var(--text3)">All pool providers already assigned.</span>`;
-
-  document.getElementById('tcO').textContent = others.length + ' staff';
-  document.getElementById('chipsO').innerHTML = others.map(p => {
-    const busy = isProviderBusyThisWeek(p, ev.id, ev.date);
-    const busyBadge = busy ? `<span style="font-size:9px;background:#FEF3E2;color:#B45309;border-radius:3px;padding:1px 4px;margin-left:3px;font-weight:600">busy</span>` : '';
-    return `<span class="pchip pchip-other" style="${busy?'opacity:.7':''}"><span class="pav pav-o">${ini(p)}</span>${p}${busyBadge}<button class="chip-action add" onclick="showToast('Add ${p} — save via Edit Event','')">+ add</button></span>`;
-  }).join('');
 
   // Checklist
   const checks = [
@@ -2035,7 +2181,9 @@ function openNewEventModal() {
   clearForm();
   // Default date to today
   const today = new Date();
-  document.getElementById('f-date').value = today.toISOString().split('T')[0];
+  const todayStr = today.toISOString().split('T')[0];
+  document.getElementById('f-date').value = todayStr;
+  updateProviderHint(todayStr);
   openModal('formModal');
 }
 
@@ -2051,6 +2199,9 @@ function openEditFromDetail() {
   document.getElementById('f-date').value     = ev.date;
   document.getElementById('f-location').value = ev.location || '';
   document.getElementById('f-address').value  = ev.address || '';
+  // Set date on the assignment panel before populating selections, so
+  // the weekend-pool section is correct from the first render.
+  updateProviderHint(ev.date);
   providerPicker.setValue(ev.provider || '');
   providersPicker.setValue(ev.providers || '');
   ceTeamPicker.setValue(ev.ceTeam || '');
@@ -2068,8 +2219,6 @@ function openEditFromDetail() {
     document.getElementById('f-time').value = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
   }
 
-  // Hint: show weekend pool for chosen date
-  updateProviderHint(ev.date);
   openModal('formModal');
 }
 
@@ -2083,6 +2232,7 @@ function updateProviderHint(dateStr) {
       hint.textContent = `Weekend pool: ${pool.slice(0,6).join(', ')}${pool.length > 6 ? ` +${pool.length-6} more` : ''}`;
     } else { hint.textContent = ''; }
   } else { hint.textContent = ''; }
+  if (providersPicker) providersPicker.setDate(dateStr);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
