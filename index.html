@@ -273,6 +273,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase;
   letter-spacing: .06em; margin-bottom: 8px; display: flex; align-items: center; gap: 5px;
 }
+.pchip-status { display:inline-flex; align-items:center; margin-left:5px; }
 .dm-edit-link {
   margin-left: auto; background: none; border: none; color: var(--brand);
   font-size: 11px; font-weight: 700; text-transform: none; letter-spacing: normal;
@@ -2076,7 +2077,27 @@ function renderList() {
 }
 
 // ── DETAIL MODAL ──────────────────────────────────────────
-function openDetailModal(id) {
+async function fetchProviderConfirmations(eventId) {
+  try {
+    const token = await getToken();
+    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$filter=fields/CE_EventId eq ${eventId}&$top=50`;
+    const data = await graphFetch(url, token);
+    // Return a map of email → status for easy lookup
+    const map = {};
+    (data.value || []).forEach(item => {
+      const f = item.fields;
+      if (f.CE_ProviderEmail) {
+        map[f.CE_ProviderEmail.toLowerCase()] = f.CE_Confirmed?.Value || f.CE_Confirmed || 'Pending';
+      }
+    });
+    return map;
+  } catch (e) {
+    console.warn('Could not fetch confirmations:', e);
+    return {};
+  }
+}
+
+async function openDetailModal(id) {
   const ev = events.find(e => e.id === id);
   if (!ev) return;
   detailEventId = id;
@@ -2121,21 +2142,66 @@ function openDetailModal(id) {
     else { coordSec.style.display = 'none'; }
   }
 
-  // Provider assignment — read-only summary, editing happens in Edit Event
+  // Provider assignment — fetch live confirmation statuses from CE_ProviderConfirmations
   const assigned = [ev.provider, ev.providers].filter(Boolean).join('; ').split(';').map(s=>s.trim()).filter(Boolean);
 
   function ini(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
+  // Show chips immediately with names while we fetch statuses
   document.getElementById('chipsA').innerHTML = assigned.length
-    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}</span>`).join('')
+    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}<span class="pchip-status" data-provider="${p.toLowerCase()}"><i class="ti ti-loader" style="font-size:10px;opacity:.4"></i></span></span>`).join('')
     : `<span style="font-size:12px;color:var(--text3)">No providers assigned yet.</span>`;
 
-  const confirmEl = document.getElementById('confirmMsg');
-  if (ev.status === 'Scheduled') {
-    confirmEl.innerHTML = `<div class="confirm-msg pending"><i class="ti ti-mail" style="font-size:13px"></i> Confirmation email sent — awaiting provider response</div>`;
-  } else if (ev.status === 'Confirmed') {
-    confirmEl.innerHTML = `<div class="confirm-msg ok"><i class="ti ti-circle-check" style="font-size:13px"></i> All providers confirmed</div>`;
-  } else { confirmEl.innerHTML = ''; }
+  document.getElementById('confirmMsg').innerHTML = '';
+
+  // Fetch live statuses and update chips
+  if (assigned.length && ev.id) {
+    fetchProviderConfirmations(ev.id).then(statusMap => {
+      // Match provider names to emails via PROVIDER_ROSTER
+      const confirmed = [];
+      const pending = [];
+      const conflict = [];
+
+      assigned.forEach(name => {
+        const rosterEntry = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
+        const email = rosterEntry ? rosterEntry.email.toLowerCase() : name.toLowerCase();
+        const status = statusMap[email] || 'Unknown';
+        if (status === 'Confirmed') confirmed.push(name);
+        else if (status === 'Conflict') conflict.push(name);
+        else pending.push(name);
+      });
+
+      // Update each chip with its status badge
+      assigned.forEach(name => {
+        const rosterEntry = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
+        const email = rosterEntry ? rosterEntry.email.toLowerCase() : name.toLowerCase();
+        const status = statusMap[email] || 'Pending';
+        const statusConfig = {
+          Confirmed: { icon: 'ti-circle-check', color: 'var(--conf-bd)', label: 'Confirmed' },
+          Pending:   { icon: 'ti-clock',        color: 'var(--text3)',   label: 'Pending'   },
+          Conflict:  { icon: 'ti-alert-circle', color: '#DC2626',        label: 'Conflict'  },
+          Unknown:   { icon: 'ti-help-circle',  color: 'var(--text3)',   label: ''          },
+        }[status] || { icon: 'ti-clock', color: 'var(--text3)', label: 'Pending' };
+
+        const el = document.querySelector(`.pchip-status[data-provider="${name.toLowerCase()}"]`);
+        if (el) el.innerHTML = `<i class="ti ${statusConfig.icon}" style="font-size:11px;color:${statusConfig.color}" title="${statusConfig.label}"></i>`;
+      });
+
+      // Summary banner
+      const confirmEl = document.getElementById('confirmMsg');
+      if (!assigned.length) { confirmEl.innerHTML = ''; return; }
+
+      if (confirmed.length === assigned.length) {
+        confirmEl.innerHTML = `<div class="confirm-msg ok"><i class="ti ti-circle-check" style="font-size:13px"></i> All ${assigned.length} providers confirmed</div>`;
+      } else if (conflict.length) {
+        confirmEl.innerHTML = `<div class="confirm-msg pending" style="border-color:#DC2626;background:#FEF2F2"><i class="ti ti-alert-circle" style="font-size:13px;color:#DC2626"></i> ${conflict.length} conflict${conflict.length>1?'s':''} reported — ${pending.length} still pending</div>`;
+      } else if (confirmed.length > 0) {
+        confirmEl.innerHTML = `<div class="confirm-msg pending"><i class="ti ti-clock" style="font-size:13px"></i> ${confirmed.length} of ${assigned.length} confirmed — waiting on ${pending.length}</div>`;
+      } else {
+        confirmEl.innerHTML = `<div class="confirm-msg pending"><i class="ti ti-mail" style="font-size:13px"></i> Confirmation emails sent — awaiting responses</div>`;
+      }
+    });
+  }
 
   // Checklist
   const checks = [
