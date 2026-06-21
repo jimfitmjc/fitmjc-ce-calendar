@@ -2152,7 +2152,11 @@ async function openDetailModal(id) {
 
   // Show chips immediately with names while we fetch statuses
   document.getElementById('chipsA').innerHTML = assigned.length
-    ? assigned.map(p => `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}<span class="pchip-status" data-provider="${p.toLowerCase()}"><i class="ti ti-loader" style="font-size:10px;opacity:.4"></i></span></span>`).join('')
+    ? assigned.map(p => {
+        const rosterEntry = PROVIDER_ROSTER.find(r => r.name.toLowerCase() === p.toLowerCase());
+        const email = rosterEntry ? rosterEntry.email.toLowerCase() : '';
+        return `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}<span class="pchip-status" data-provider-email="${email}"><i class="ti ti-loader" style="font-size:10px;opacity:.4"></i></span></span>`;
+      }).join('')
     : `<span style="font-size:12px;color:var(--text3)">No providers assigned yet.</span>`;
 
   document.getElementById('confirmMsg').innerHTML = '';
@@ -2186,7 +2190,7 @@ async function openDetailModal(id) {
           Unknown:   { icon: 'ti-help-circle',  color: 'var(--text3)',   label: ''          },
         }[status] || { icon: 'ti-clock', color: 'var(--text3)', label: 'Pending' };
 
-        const el = document.querySelector(`.pchip-status[data-provider="${name.toLowerCase()}"]`);
+        const el = document.querySelector(`.pchip-status[data-provider-email="${email}"]`);
         if (el) el.innerHTML = `<i class="ti ${statusConfig.icon}" style="font-size:11px;color:${statusConfig.color}" title="${statusConfig.label}"></i>`;
       });
 
