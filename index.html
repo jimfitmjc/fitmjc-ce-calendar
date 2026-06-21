@@ -2080,16 +2080,19 @@ function renderList() {
 async function fetchProviderConfirmations(eventId) {
   try {
     const token = await getToken();
-    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$filter=fields/CE_EventId eq ${eventId}&$top=50`;
+    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$top=50`;
+    console.log('[Confirmations] Fetching all rows, eventId to match:', eventId);
     const data = await graphFetch(url, token);
-    // Return a map of email → status for easy lookup
+    console.log('[Confirmations] Raw rows:', data.value?.length, data.value?.map(i => i.fields));
     const map = {};
     (data.value || []).forEach(item => {
       const f = item.fields;
-      if (f.CE_ProviderEmail) {
+      console.log('[Confirmations] Row:', f.CE_EventId, f.CE_ProviderEmail, f.CE_Confirmed);
+      if (f.CE_ProviderEmail && f.CE_EventId == eventId) {
         map[f.CE_ProviderEmail.toLowerCase()] = f.CE_Confirmed?.Value || f.CE_Confirmed || 'Pending';
       }
     });
+    console.log('[Confirmations] Status map for event', eventId, ':', map);
     return map;
   } catch (e) {
     console.warn('Could not fetch confirmations:', e);
