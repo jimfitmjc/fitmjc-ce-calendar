@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>F.I.T. MJC — Community Engagement Calendar</title>
-<script src="https://alcdn.msauth.net/browser/2.38.2/js/msal-browser.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.2/js/msal-browser.min.js" defer onerror="document.getElementById('authError').textContent='Auth library failed to load. Please refresh.'"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 /* ── TOKENS ─────────────────────────────────────────────── */
@@ -2057,10 +2057,10 @@ function isProviderBusyThisWeek(providerName, excludeEventId, dateStr) {
 // ── RENDER ────────────────────────────────────────────────
 function render() {
   updateStats();
-  if (isMobile()) { mobInit(); return; }
   if (curView === 'list')  renderList();
   else if (curView === 'week') renderWeek();
   else renderCalendar();
+  if (isMobile()) mobInit();
 }
 
 function updateStats() {
@@ -3013,15 +3013,19 @@ function mobInit() {
   mobSetView('month');
 }
 
-// Re-render mobile views when events load
-const _origRender = window.renderCalendar;
-function renderCalendar() {
-  if (typeof _origRender === 'function') _origRender();
-  if (isMobile()) mobInit();
-}
-
 initPersonPickers();
-initAuth();
+// Wait for MSAL to load before initializing auth
+if (typeof msal !== 'undefined') {
+  initAuth();
+} else {
+  const msalScript = document.querySelector('script[src*="msal"]');
+  if (msalScript) {
+    msalScript.addEventListener('load', initAuth);
+    msalScript.addEventListener('error', () => {
+      document.getElementById('authError').textContent = 'Authentication library failed to load. Please refresh.';
+    });
+  }
+}
 </script>
 </body>
 </html>
