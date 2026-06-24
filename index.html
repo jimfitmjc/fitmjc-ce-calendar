@@ -871,13 +871,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   <nav class="topnav">
     <div class="nav-brand">
       <div class="nav-logo-wrap">
-        <!-- F.I.T. MJC wordmark SVG logo -->
-        <svg class="nav-logo-svg" viewBox="0 0 120 36" xmlns="http://www.w3.org/2000/svg" aria-label="F.I.T. Muscle and Joint Clinic">
-          <!-- FIT letters -->
-          <text x="0" y="22" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="22" font-weight="900" fill="#FFFFFF" letter-spacing="1">F.I.T.</text>
-          <!-- Subtitle -->
-          <text x="1" y="33" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8" font-weight="500" fill="#C8102E" letter-spacing="1.5">MUSCLE &amp; JOINT</text>
-        </svg>
+        <img src="https://raw.githubusercontent.com/jimfitmjc/fitmjc-ce-calendar/main/FIT_logo_dark-background_transparent.png" alt="F.I.T. Muscle &amp; Joint Clinic" style="height:32px;width:auto;display:block;" />
         <div class="nav-divider"></div>
         <div>
           <div class="nav-tool-name">CE Calendar</div>
@@ -1845,6 +1839,9 @@ function spItemToEvent(item) {
     provider,
     providers,
     ceTeam,
+    providerEmail:  spPersonEmailFromFields(f, 'Provider', 'Provider0'),
+    providersEmail: spPersonEmailFromFields(f, 'Providers', 'Providers0'),
+    ceTeamEmail:    spPersonEmailFromFields(f, 'CETeamMember', 'CE_x0020_Team_x0020_Member'),
     contact:   '',
     reminder:  '',
     followup:  f.Followupemailsent       || '',
@@ -1874,6 +1871,31 @@ function spPersonNameFromFields(fields, ...keys) {
   for (const key of keys) {
     const val = fields[key];
     if (val !== undefined && val !== null && val !== '') return spPersonName(val);
+  }
+  return '';
+}
+
+function spPersonEmail(val) {
+  if (!val) return '';
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    return (val.Email || val.email || val.EMail || '').toLowerCase();
+  }
+  if (Array.isArray(val)) {
+    return val.map(v => {
+      if (typeof v === 'object') return (v.Email || v.email || v.EMail || '').toLowerCase();
+      return '';
+    }).filter(Boolean).join('; ');
+  }
+  return '';
+}
+
+function spPersonEmailFromFields(fields, ...keys) {
+  for (const key of keys) {
+    const val = fields[key];
+    if (val !== undefined && val !== null && val !== '') {
+      const email = spPersonEmail(val);
+      if (email) return email;
+    }
   }
   return '';
 }
@@ -2099,6 +2121,11 @@ function filteredEvents() {
 
 function isMyEvent(ev) {
   const email = currentUser.email.toLowerCase();
+  // Match by email (reliable) — falls back to name match for legacy data
+  if (ev.providerEmail && ev.providerEmail.includes(email)) return true;
+  if (ev.providersEmail && ev.providersEmail.includes(email)) return true;
+  if (ev.ceTeamEmail && ev.ceTeamEmail.includes(email)) return true;
+  // Fallback: name-based match for events where email wasn't resolved
   const provEmail = ev.provider ? ev.provider.toLowerCase() : '';
   const provsEmail = ev.providers ? ev.providers.toLowerCase() : '';
   const ceEmail = ev.ceTeam ? ev.ceTeam.toLowerCase() : '';
@@ -2390,18 +2417,14 @@ async function fetchProviderConfirmations(eventId) {
   try {
     const token = await getToken();
     const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$top=50`;
-    console.log('[Confirmations] Fetching all rows, eventId to match:', eventId);
     const data = await graphFetch(url, token);
-    console.log('[Confirmations] Raw rows:', data.value?.length, data.value?.map(i => i.fields));
     const map = {};
     (data.value || []).forEach(item => {
       const f = item.fields;
-      console.log('[Confirmations] Row:', f.CE_EventId, f.CE_ProviderEmail, f.CE_Confirmed);
       if (f.CE_ProviderEmail && f.CE_EventId == eventId) {
         map[f.CE_ProviderEmail.toLowerCase()] = f.CE_Confirmed?.Value || f.CE_Confirmed || 'Pending';
       }
     });
-    console.log('[Confirmations] Status map for event', eventId, ':', map);
     return map;
   } catch (e) {
     console.warn('Could not fetch confirmations:', e);
