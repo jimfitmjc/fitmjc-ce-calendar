@@ -1707,7 +1707,7 @@ async function onSignedIn() {
 
   currentUser = {
     name, email,
-    isEditor: CE_TEAM_EMAILS.some(e => e === email) || true // open edit for now — restrict post-testing
+    isEditor: CE_TEAM_EMAILS.some(e => e === email)
   };
 
   document.getElementById('authOverlay').style.display = 'none';
