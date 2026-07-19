@@ -2728,7 +2728,7 @@ async function saveEvent() {
       if (idx >= 0) {
         events[idx] = { ...events[idx], ...formData,
           timeRaw: fields.Date || events[idx].timeRaw,
-          provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam
+          provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam,
           documentLink: formData.docLink };
       }
       showToast('Event updated ✓', 'success');
