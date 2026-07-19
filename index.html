@@ -986,7 +986,19 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="info-row"><i class="ti ti-map-pin info-icon"></i><div><div class="info-main" id="dm-loc"></div><div class="info-sub" id="dm-addr"></div></div></div>
       <div class="info-row"><i class="ti ti-user info-icon"></i><div><div class="info-main" id="dm-schedby"></div><div class="info-sub">Scheduled by</div></div></div>
     </div>
-
+    
+<!-- Document link -->
+<div class="modal-section" id="dm-doclink-section" style="display:none">
+  <div class="section-label"><i class="ti ti-paperclip"></i> Event documents</div>
+  <a id="dm-doclink-btn" href="#" target="_blank" rel="noopener"
+    style="display:inline-flex;align-items:center;gap:6px;background:var(--brand);color:#fff;
+    border-radius:var(--radius-sm);padding:7px 16px;font-size:13px;font-weight:600;
+    text-decoration:none;transition:opacity .15s;"
+    onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">
+    <i class="ti ti-external-link"></i> View Event Documents
+  </a>
+</div>
+    
     <!-- Provider assignment (read-only summary) -->
     <div class="modal-section">
       <div class="section-label">
@@ -2469,6 +2481,16 @@ async function openDetailModal(id) {
   document.getElementById('dm-addr').textContent = ev.address && ev.location ? ev.address : '';
   document.getElementById('dm-schedby').textContent = ev.schedBy || '—';
 
+  // Document link
+  const docLink = ev.CE_DocumentLink || ev.documentLink || '';
+  const docSection = document.getElementById('dm-doclink-section');
+  const docBtn = document.getElementById('dm-doclink-btn');
+  if (docLink) {
+    docBtn.href = docLink;
+    docSection.style.display = '';
+  } else {
+    docSection.style.display = 'none';
+  }
   // Coordinator contact — show if present
   const coordEl = document.getElementById('dm-coordcontact');
   const coordSec = document.getElementById('dm-coordcontact-section');
