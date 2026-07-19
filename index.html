@@ -1133,6 +1133,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     </div>
 
     <div class="form-group">
+      <label class="form-label">Document link</label>
+      <input type="text" class="form-input" id="f-doclink" placeholder="https://...">
+      <div class="form-hint">SharePoint or OneDrive link to flyer, parking pass, etc.</div>
+    </div>
+    
+    <div class="form-group">
       <label class="form-label">Event notes / other details</label>
       <textarea class="form-textarea" id="f-notes" placeholder="Contact info, equipment needed, event type, any additional details..."></textarea>
     </div>
@@ -1295,7 +1301,6 @@ const CE_TEAM_MEMBERS = [
   { name: 'Krista Schoutko', role: 'CE Director' },
   { name: 'Winnie Wilson',   role: 'CE Coordinator' },
   { name: 'Peyton Brown',    role: 'CE Coordinator' },
-  { name: 'Tyler Carter',    role: 'CE Coordinator' },
 ];
 
 // ── PERSON PICKER (typeahead, single or multi select) ──────
@@ -1861,6 +1866,7 @@ function spItemToEvent(item) {
     nextEvent: '',
     weekCoord: f.CE_WeekOfCoordinatorSent ? 'yes' : '',
     confDate:  f.CE_ConfirmationSentDate || '',
+    documentLink: f.CE_DocumentLink || '',
   };
 }
 
@@ -1980,6 +1986,7 @@ function eventToSpFields(formData) {
     CE_Status:               formData.status,
     CE_EventCategory:        formData.category    || 'Community Event',
     CE_CoordinatorContact:   formData.coordContact || '',
+    CE_DocumentLink:         formData.docLink      || '',
     Address:                 combinedAddress,
     Otherdetails:            formData.notes        || '',
     EventScheduledBy:        formData.schedBy      || '',
@@ -2626,6 +2633,7 @@ function openEditFromDetail() {
   document.getElementById('f-date').value     = ev.date;
   document.getElementById('f-location').value = ev.location || '';
   document.getElementById('f-address').value  = ev.address || '';
+  document.getElementById('f-doclink').value  = ev.documentLink || '';
   // Set date on the assignment panel before populating selections, so
   // the weekend-pool section is correct from the first render.
   updateProviderHint(ev.date);
@@ -2667,7 +2675,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function clearForm() {
-  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-schedby','f-notes','f-coordcontact'].forEach(id => {
+  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-doclink','f-schedby','f-notes','f-coordcontact'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-status').value = 'Scheduled';
@@ -2698,6 +2706,7 @@ async function saveEvent() {
     status:      document.getElementById('f-status').value,
     category:    document.getElementById('f-category').value,
     coordContact:document.getElementById('f-coordcontact').value.trim(),
+    docLink:     document.getElementById('f-doclink').value.trim(),
     location:    document.getElementById('f-location').value.trim(),
     address:  document.getElementById('f-address').value.trim(),
     provider: providerPicker.getValue(),
@@ -2718,7 +2727,8 @@ async function saveEvent() {
       if (idx >= 0) {
         events[idx] = { ...events[idx], ...formData,
           timeRaw: fields.Date || events[idx].timeRaw,
-          provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam };
+          provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam
+          documentLink: formData.docLink };
       }
       showToast('Event updated ✓', 'success');
     } else {
