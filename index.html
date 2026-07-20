@@ -1038,8 +1038,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   </div>
   <div class="modal-foot">
     <div class="foot-status" id="dm-footstatus"></div>
-    <div class="foot-btns">
+   <div class="foot-btns">
       <button class="btn-ghost" onclick="closeModal('detailModal')">Close</button>
+      <button class="btn-danger" id="dm-cancel-btn" onclick="openCancelModal()" style="display:none"><i class="ti ti-ban" style="font-size:13px"></i> Cancel event</button>
       <button class="btn-primary" onclick="openEditFromDetail()"><i class="ti ti-edit" style="font-size:13px"></i> Edit event</button>
     </div>
   </div>
@@ -1174,6 +1175,32 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 </div>
 </div>
 
+  <!-- ── CANCEL EVENT MODAL ─────────────────────────────────── -->
+<div class="modal-bg" id="cancelModal">
+<div class="modal" style="max-width:480px">
+  <div class="modal-head">
+    <div class="modal-head-top">
+      <div class="modal-title">Cancel Event</div>
+      <button class="modal-close" onclick="closeModal('cancelModal')"><i class="ti ti-x"></i></button>
+    </div>
+  </div>
+  <div class="modal-body">
+    <p style="font-size:14px;color:var(--text2);margin-bottom:1rem;">This will cancel the event and notify all assigned providers. This action cannot be undone.</p>
+    <div class="form-group">
+      <label class="form-label">Cancellation reason <span class="required">*</span></label>
+      <textarea class="form-textarea" id="cancel-reason" placeholder="Please provide a reason for cancellation..." style="min-height:100px"></textarea>
+      <div class="form-hint" id="cancel-reason-error" style="color:#DC2626;display:none">A cancellation reason is required.</div>
+    </div>
+  </div>
+  <div class="modal-foot" style="justify-content:flex-end">
+    <div class="foot-btns">
+      <button class="btn-ghost" onclick="closeModal('cancelModal')">Go back</button>
+      <button class="btn-danger" id="cancel-confirm-btn" onclick="confirmCancelEvent()" style="background:#475569;border:none;color:#fff;border-radius:var(--radius-sm);padding:6px 14px;font-size:13px;font-weight:600;">Confirm Cancellation</button>
+    </div>
+  </div>
+</div>
+</div>
+  
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
@@ -2463,7 +2490,7 @@ async function openDetailModal(id) {
 
   const d = new Date(ev.date + 'T12:00:00');
   const t = ev.timeRaw ? new Date(ev.timeRaw).toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit',hour12:true}) : '';
-  const statusIcon = {Scheduled:'ti-clock',Confirmed:'ti-circle-check',Completed:'ti-check'}[ev.status] || 'ti-clock';
+  const statusIcon = {Scheduled:'ti-clock',Confirmed:'ti-circle-check',Completed:'ti-check',Cancelled:'ti-ban'}[ev.status] || 'ti-clock';
   const isWeekend  = d.getDay() === 0 || d.getDay() === 6;
   const catColor   = ev.category === 'Physician Meeting'
     ? 'background:#F0F9FF;border-color:#BAE6FD;color:#0C4A6E'
@@ -2603,9 +2630,16 @@ async function openDetailModal(id) {
   }
 
   // Footer
+// Footer
   const fs = document.getElementById('dm-footstatus');
-  const colors = { Scheduled: 'var(--sched-bd)', Confirmed: 'var(--comp-bd)', Completed: 'var(--text3)' };
-  fs.innerHTML = `<span style="color:${colors[ev.status]}"><i class="ti ${statusIcon}" style="font-size:13px;vertical-align:-2px"></i> ${ev.status}</span>`;
+  const colors = { Scheduled: 'var(--sched-bd)', Confirmed: 'var(--comp-bd)', Completed: 'var(--text3)', Cancelled: '#475569' };
+  fs.innerHTML = `<span style="color:${colors[ev.status] || 'var(--text3)'}"><i class="ti ${statusIcon}" style="font-size:13px;vertical-align:-2px"></i> ${ev.status}</span>`;
+
+  // Show cancel button for editors on non-cancelled events
+  const cancelBtn = document.getElementById('dm-cancel-btn');
+  if (cancelBtn) {
+    cancelBtn.style.display = (currentUser.isEditor && ev.status !== 'Cancelled') ? 'inline-flex' : 'none';
+  }
 
   openModal('detailModal');
 }
@@ -2750,6 +2784,41 @@ async function saveEvent() {
   }
 }
 
+  function openCancelModal() {
+  document.getElementById('cancel-reason').value = '';
+  document.getElementById('cancel-reason-error').style.display = 'none';
+  openModal('cancelModal');
+}
+
+async function confirmCancelEvent() {
+  const reason = document.getElementById('cancel-reason').value.trim();
+  if (!reason) {
+    document.getElementById('cancel-reason-error').style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('cancel-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Cancelling...';
+  try {
+    await spUpdate(detailEventId, {
+      CE_Status: 'Cancelled',
+      CE_CancellationReason: reason
+    });
+    const idx = events.findIndex(e => e.id === detailEventId);
+    if (idx >= 0) events[idx].status = 'Cancelled';
+    closeModal('cancelModal');
+    closeModal('detailModal');
+    showToast('Event cancelled ✓', '');
+    render();
+  } catch(e) {
+    console.error('Cancel error', e);
+    showToast('Cancellation failed — check console', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm Cancellation';
+  }
+}
+  
 async function deleteCurrentEvent() {
   if (!editingEventId) return;
   const ev = events.find(e => e.id === editingEventId);
@@ -2833,7 +2902,7 @@ function showToast(msg, type) {
 }
 
 // Close modals on backdrop click
-['detailModal','formModal'].forEach(id => {
+['detailModal','formModal','cancelModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target === this) closeModal(id);
   });
