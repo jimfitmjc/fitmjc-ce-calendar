@@ -2611,6 +2611,7 @@ async function openDetailModal(id) {
     { label: 'Event coordinator sent', val: ev.followup },
     { label: 'Social photo captured',  val: ev.photo    },
     { label: 'Week of email to coordinator sent', val: ev.weekCoord },
+    { label: 'Team event', val: ev.teamEvent },
   ];
   document.getElementById('dm-checklist').innerHTML = checks.map(c => {
     const done = c.val === 'yes' || c.val === 'Yes';
