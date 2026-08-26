@@ -1159,6 +1159,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="f-weekcoord" style="width:15px;height:15px;accent-color:var(--brand)"> Week of email to coordinator sent
         </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="f-teamEvent" style="width:15px;height:15px;accent-color:var(--brand)"> Team event
+        </label>
       </div>
     </div>
 
@@ -1896,6 +1899,7 @@ function spItemToEvent(item) {
     nextEvent: '',
     weekCoord: f.CE_WeekOfCoordinatorSent ? 'yes' : '',
     confDate:  f.CE_ConfirmationSentDate || '',
+    teamEvent: f.CE_IsTeamEvent ? 'yes' : '',
     documentLink: f.CE_DocumentLink || '',
   };
 }
@@ -2022,6 +2026,7 @@ function eventToSpFields(formData) {
     EventScheduledBy:        formData.schedBy      || '',
     Followupemailsent:       choiceVal(formData.followup,   'yes'),
     SocialPhotoCaptured:     choiceVal(formData.photo,      'yes'),
+    CE_IsTeamEvent:          formData.teamEvent || false,
   };
   if (formData.date) {
     const timeStr = formData.time || '00:00';
@@ -2685,6 +2690,7 @@ function openEditFromDetail() {
   document.getElementById('f-followup').checked  = ev.followup === 'yes';
   document.getElementById('f-photo').checked     = ev.photo === 'yes';
   document.getElementById('f-weekcoord').checked = ev.weekCoord === 'yes';
+  document.getElementById('f-teamEvent').checked  = ev.teamEvent === 'yes';
 
   if (ev.timeRaw) {
     const t = new Date(ev.timeRaw);
@@ -2717,7 +2723,7 @@ function clearForm() {
   });
   document.getElementById('f-status').value = 'Scheduled';
   document.getElementById('f-category').value = 'Community Event';
-  ['f-followup','f-photo','f-weekcoord'].forEach(id => {
+  ['f-followup','f-photo','f-weekcoord','f-teamEvent'].forEach(id => {
     document.getElementById(id).checked = false;
   });
   providerPicker.clear();
@@ -2754,6 +2760,7 @@ async function saveEvent() {
     followup: document.getElementById('f-followup').checked,
     photo:    document.getElementById('f-photo').checked,
     weekCoord:document.getElementById('f-weekcoord').checked,
+    teamEvent:document.getElementById('f-teamEvent').checked,
   };
 
   try {
@@ -2762,10 +2769,10 @@ async function saveEvent() {
       await spUpdate(editingEventId, fields);
       const idx = events.findIndex(e => e.id === editingEventId);
       if (idx >= 0) {
-        events[idx] = { ...events[idx], ...formData,
+    events[idx] = { ...events[idx], ...formData,
           timeRaw: fields.Date || events[idx].timeRaw,
           provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam,
-          documentLink: formData.docLink };
+          documentLink: formData.docLink, teamEvent: formData.teamEvent ? 'yes' : '' };
       }
       showToast('Event updated ✓', 'success');
     } else {
