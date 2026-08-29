@@ -1217,6 +1217,7 @@ const SP_SITE_ID              = 'netorg8433049.sharepoint.com,b0aa2d71-3fcf-4763
 const LIST_ID                 = '30E7FF98-9E23-4A67-853A-6CFDBC254B9F';
 const CE_CONFIRMATIONS_LIST_ID = '429d21b9-9561-4343-8d03-c7c47ee4adac';
 const CE_PROVIDERS_LIST_ID    = '0f9d79ab-02d2-4458-8b03-4fd4c8136537';
+const CE_PROVIDER_AVAILABILITY_LIST_ID = '1601c7be-b8da-4aea-88a9-6c4ebd27435e';
 const CE_EQUIPMENT_LIST_ID    = '56c52800-6963-4ec2-b301-4c737c54a387';
 const GRAPH_BASE              = 'https://graph.microsoft.com/v1.0';
 const REDIRECT_URI            = window.location.origin + window.location.pathname.replace(/\/$/, '');
@@ -1229,9 +1230,12 @@ const CE_TEAM_EMAILS = [
   'jim@fitmjc.com','jim.heatherman@fitmjc.com',
 ];
 
-// Full provider roster from CE Providers list
-// Format: { name, email, cdEmail, location }
-const PROVIDER_ROSTER = [
+// Full provider roster, loaded live from the CE Providers SharePoint list
+// by fetchProviderRoster() once the user signs in (see loadRosterAndAvailability()).
+// Format: { name, email, cdEmail, location, participationLevel }
+// Kept as a hardcoded fallback below in case the live fetch fails, so the
+// app degrades to last-known-good data rather than an empty roster.
+let PROVIDER_ROSTER = [
   {name:'Matthew Lane',email:'matt@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
   {name:'Jim Heatherman',email:'jim@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
   {name:'Chad Barnes',email:'drbarnes@fitmjc.com',cdEmail:'dilyn@fitmjc.com',location:'Shawnee'},
@@ -1300,34 +1304,70 @@ const PROVIDER_ROSTER = [
   {name:'Garrett Rolofson',email:'garrett.rolofson@fitmjc.com',cdEmail:'matthew@fitmjc.com',location:'Leawood'},
 ];
 
-// Derived full name list for UI
-const ALL_STAFF = PROVIDER_ROSTER.map(p => p.name);
+// Derived full name list for UI — recomputed by loadRosterAndAvailability()
+// once live roster data is in.
+let ALL_STAFF = PROVIDER_ROSTER.map(p => p.name);
 
-// Provider weekend pool from 2026 Excel schedule (Saturday = week key)
-const WEEKEND_POOLS = {
-  '2026-05-30':['Chris','Josh','Taylor','Jenn','Tyler','Natalie','Christian','Connor','Rustin','Jaimison','Maya','Camden','Collin','Riley','Emily','Spencer','Rory','Kysn'],
-  '2026-06-06':['Chris','Josh','Taylor','Jenn','Tyler','Natalie','Christian','Connor','Rustin','Jaimison','Maya','Camden','Collin','Riley','Emily','Spencer','Rory','Kysn'],
-  '2026-06-13':['Reid','Josh','Emily','Skylar','Dace','Ryan','Lindsey','Cameron','Korbyn','Hayden','Jess','Katelyn','Kysn','Eli','Spencer'],
-  '2026-06-20':['Megan','Maggie','Aidan','Madi','Skylar','Jenn','Rustin','Tyler','Joe','Jenkins','Aaron','Connor','Jaimison','Eli','Jess','Camden','Riley','Dace'],
-  '2026-06-27':['Aidan','Madi','Skylar','Jenn','Rustin','Tyler','Joe','Jenkins','Aaron','Connor','Jaimison','Eli','Jess','Camden','Riley','Dace'],
-  '2026-07-04':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Riley'],
-  '2026-07-11':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Skylar','Jess'],
-  '2026-07-18':['Megan','Maggie','Aidan','Madi','Tyler','Joe','Aaron','Connor','Jaimison','Camden'],
-  '2026-07-25':['Aidan','Madi','Jenn','Rustin','Jenkins','Eli','Jess','Riley','Dace','Skylar'],
-  '2026-08-01':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Kysn'],
-  '2026-08-08':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Jess','Katelyn'],
-  '2026-08-22':['Megan','Maggie','Aidan','Madi','Tyler','Joe','Aaron','Connor','Jaimison','Camden'],
-  '2026-08-29':['Aidan','Madi','Jenn','Rustin','Jenkins','Eli','Jess','Riley','Dace','Skylar'],
-  '2026-09-05':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Riley'],
-  '2026-09-19':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Skylar','Jess'],
-  '2026-09-26':['Megan','Maggie','Aidan','Madi','Tyler','Joe','Aaron','Connor','Jaimison','Camden'],
-  '2026-10-03':['Aidan','Madi','Jenn','Rustin','Jenkins','Eli','Jess','Riley','Dace','Skylar'],
-  '2026-10-17':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Kysn'],
-  '2026-11-07':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Jess','Katelyn'],
-  '2026-11-21':['Megan','Maggie','Aidan','Madi','Tyler','Joe','Aaron','Connor','Jaimison','Camden'],
-  '2026-12-05':['Chris','Josh','Taylor','Emily','Christian','Natalie','Spencer','Rory','Collin','Riley'],
-  '2026-12-19':['Reid','Ryan','Lindsey','Hayden','Cameron','Korbyn','Eli','Dace','Skylar','Jess'],
-};
+// Live blackout lookup, keyed 'email|yyyy-mm-dd', populated by
+// fetchProviderAvailability() from the CE Provider Availability list.
+// getWeekendPool() below reads this instead of a hardcoded weekly pool.
+let BLACKOUT_SET = new Set();
+
+// ── LIVE ROSTER + AVAILABILITY ──────────────────────────────
+async function fetchProviderRoster() {
+  const token = await getToken();
+  const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_PROVIDERS_LIST_ID}/items?expand=fields($select=Title,CE_Email,CE_ClinicDirectorEmail,CE_ClinicLocation,CE_ParticipationLevel,CE_Active)&$top=999`;
+  const data = await graphFetch(url, token);
+  return (data.value || [])
+    .filter(item => !!item.fields.CE_Active) // CE_Active = Yes is the inclusion criterion
+    .map(item => {
+      const f = item.fields;
+      return {
+        name: f.Title || '',
+        email: (f.CE_Email || '').toLowerCase(),
+        cdEmail: f.CE_ClinicDirectorEmail || '',
+        location: f.CE_ClinicLocation || '',
+        participationLevel: f.CE_ParticipationLevel || '',
+      };
+    })
+    .filter(p => p.name && p.email);
+}
+
+async function fetchProviderAvailability() {
+  const token = await getToken();
+  const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_PROVIDER_AVAILABILITY_LIST_ID}/items?expand=fields($select=CE_ProviderEmail,CE_BlackoutDate)&$top=999`;
+  const data = await graphFetch(url, token);
+  const set = new Set();
+  (data.value || []).forEach(item => {
+    const f = item.fields;
+    if (f.CE_ProviderEmail && f.CE_BlackoutDate) {
+      const dateStr = String(f.CE_BlackoutDate).split('T')[0];
+      set.add(`${f.CE_ProviderEmail.toLowerCase()}|${dateStr}`);
+    }
+  });
+  return set;
+}
+
+// Called right after sign-in, before loadEvents(). On failure, leaves the
+// hardcoded PROVIDER_ROSTER fallback and an empty BLACKOUT_SET in place
+// rather than blocking app load.
+async function loadRosterAndAvailability() {
+  try {
+    const [roster, blackouts] = await Promise.all([
+      fetchProviderRoster(),
+      fetchProviderAvailability(),
+    ]);
+    if (roster.length) {
+      PROVIDER_ROSTER = roster;
+      ALL_STAFF = PROVIDER_ROSTER.map(p => p.name);
+    }
+    BLACKOUT_SET = blackouts;
+  } catch (e) {
+    console.warn('Could not load live roster/availability — using fallback roster:', e);
+  }
+  // Rebuild the pickers now that PROVIDER_ROSTER reflects live data.
+  initPersonPickers();
+}
 
 const CE_TEAM_MEMBERS = [
   { name: 'Krista Schoutko', role: 'CE Director' },
@@ -1346,13 +1386,30 @@ class PersonPicker {
   // options: { containerId, people: [{name, loc}], multi: bool, placeholder }
   constructor(opts) {
     this.el = document.getElementById(opts.containerId);
-    this.people = opts.people;       // [{name, loc}]
+    this.people = opts.people;       // [{name, loc, participationLevel}]
     this.multi = !!opts.multi;
     this.placeholder = opts.placeholder || 'Type a name…';
     this.selected = [];              // array of names (length 1 if !multi)
     this.highlightIdx = -1;
+    this.teamEvent = false;          // set via setTeamEvent() from the Team event checkbox
     this._build();
   }
+
+  // "Team Events Only" providers are only selectable when the current
+  // event is flagged as a team event; "Inactive" never is. Entries with
+  // no participationLevel (e.g. CE team members) are unaffected.
+  _visiblePeople() {
+    return this.people.filter(p => {
+      if (p.participationLevel === 'Inactive') return false;
+      if (p.participationLevel === 'Team Events Only') return this.teamEvent;
+      return true;
+    });
+  }
+
+  // Called when the Team event checkbox changes. _matches() reads
+  // this.teamEvent fresh on every keystroke/focus, so no immediate
+  // re-render is needed here.
+  setTeamEvent(isTeamEvent) { this.teamEvent = !!isTeamEvent; }
 
   _build() {
     this.el.innerHTML = `
@@ -1375,7 +1432,7 @@ class PersonPicker {
 
   _matches() {
     const q = this.inputEl.value.trim().toLowerCase();
-    const avail = this.people.filter(p => !this.selected.includes(p.name));
+    const avail = this._visiblePeople().filter(p => !this.selected.includes(p.name));
     if (!q) return avail.slice(0, 8);
     return avail.filter(p => p.name.toLowerCase().includes(q)).slice(0, 8);
   }
@@ -1492,11 +1549,29 @@ class PersonPicker {
 class ProviderAssignPanel {
   constructor(opts) {
     this.el = document.getElementById(opts.containerId);
-    this.people = opts.people; // [{name, loc}]
+    this.people = opts.people; // [{name, loc, participationLevel}]
     this.selected = [];
     this.dateStr = '';
     this.rosterOpen = false;
+    this.teamEvent = false;    // set via setTeamEvent() from the Team event checkbox
     this._build();
+  }
+
+  // Same visibility rule as PersonPicker._visiblePeople(): "Team Events
+  // Only" providers show only when this event is a team event; "Inactive"
+  // never shows.
+  _visiblePeople() {
+    return this.people.filter(p => {
+      if (p.participationLevel === 'Inactive') return false;
+      if (p.participationLevel === 'Team Events Only') return this.teamEvent;
+      return true;
+    });
+  }
+
+  setTeamEvent(isTeamEvent) {
+    this.teamEvent = !!isTeamEvent;
+    this.searchPicker.setTeamEvent(this.teamEvent);
+    this._render();
   }
 
   _build() {
@@ -1581,7 +1656,7 @@ class ProviderAssignPanel {
 
   _render() {
     const pool = this.dateStr ? getWeekendPool(this.dateStr) : [];
-    const poolNames = pool.filter(n => this.people.some(p => p.name === n));
+    const poolNames = pool.filter(n => this._visiblePeople().some(p => p.name === n));
 
     this.assignCountEl.textContent = `(${this.selected.length})`;
     this.assignedChipsEl.innerHTML = this.selected.length
@@ -1605,7 +1680,7 @@ class ProviderAssignPanel {
       this.poolBlockEl.style.display = 'none';
     }
 
-    const rosterAvail = this.people
+    const rosterAvail = this._visiblePeople()
       .map(p => p.name)
       .filter(n => !this.selected.includes(n) && !poolNames.includes(n));
     this.rosterCountEl.textContent = `(${rosterAvail.length})`;
@@ -1646,7 +1721,7 @@ class ProviderAssignPanel {
 
 let providerPicker, providersPicker, ceTeamPicker;
 function initPersonPickers() {
-  const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, loc: p.location }));
+  const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, loc: p.location, participationLevel: p.participationLevel }));
   const ceTeamPeople = CE_TEAM_MEMBERS.map(m => ({ name: m.name, loc: m.role }));
   providerPicker  = new PersonPicker({ containerId: 'picker-provider', people: rosterPeople, multi: false, placeholder: 'Type a provider name…' });
   providersPicker = new ProviderAssignPanel({ containerId: 'assign-panel-providers', people: rosterPeople });
@@ -1766,6 +1841,7 @@ async function onSignedIn() {
   // Always show My events tab
   document.getElementById('myEventsTab').style.display = 'inline-flex';
 
+  await loadRosterAndAvailability();
   await loadEvents();
 }
 
@@ -2089,6 +2165,8 @@ async function eventToSpFieldsWithPeople(formData) {
 }
 
 // ── WEEKEND POOL HELPERS ──────────────────────────────────
+// Live-computed: every "Regular CE Events + Team Events" provider who
+// doesn't have a blackout row for this Saturday in CE Provider Availability.
 function getWeekendPool(dateStr) {
   if (!dateStr) return [];
   const d = new Date(dateStr + 'T12:00:00');
@@ -2096,18 +2174,10 @@ function getWeekendPool(dateStr) {
   const sat = new Date(d);
   sat.setDate(d.getDate() + (dow === 6 ? 0 : dow === 0 ? -1 : 6 - dow));
   const satStr = sat.toISOString().split('T')[0];
-  const keys = Object.keys(WEEKEND_POOLS).sort();
-  let best = null;
-  for (const k of keys) { if (k <= satStr) best = k; }
-  if (!best) return [];
-  // Map first names to full names via PROVIDER_ROSTER
-  return WEEKEND_POOLS[best].map(firstName => {
-    const match = PROVIDER_ROSTER.find(p =>
-      p.name.toLowerCase().startsWith(firstName.toLowerCase()) ||
-      p.name.toLowerCase().includes(' ' + firstName.toLowerCase())
-    );
-    return match ? match.name : firstName;
-  });
+  return PROVIDER_ROSTER
+    .filter(p => p.participationLevel === 'Regular CE Events + Team Events')
+    .filter(p => !BLACKOUT_SET.has(`${p.email}|${satStr}`))
+    .map(p => p.name);
 }
 
 // Check if a provider is assigned to another event in the same week
@@ -2677,9 +2747,12 @@ function openEditFromDetail() {
   document.getElementById('f-location').value = ev.location || '';
   document.getElementById('f-address').value  = ev.address || '';
   document.getElementById('f-doclink').value  = ev.documentLink || '';
-  // Set date on the assignment panel before populating selections, so
-  // the weekend-pool section is correct from the first render.
+  // Set date and team-event state on the pickers before populating
+  // selections, so the weekend-pool/roster sections are correct on the
+  // first render.
   updateProviderHint(ev.date);
+  providerPicker.setTeamEvent(ev.teamEvent === 'yes');
+  providersPicker.setTeamEvent(ev.teamEvent === 'yes');
   providerPicker.setValue(ev.provider || '');
   providersPicker.setValue(ev.providers || '');
   ceTeamPicker.setValue(ev.ceTeam || '');
@@ -2716,6 +2789,10 @@ function updateProviderHint(dateStr) {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('f-date').addEventListener('change', e => updateProviderHint(e.target.value));
+  document.getElementById('f-teamEvent').addEventListener('change', e => {
+    providerPicker.setTeamEvent(e.target.checked);
+    providersPicker.setTeamEvent(e.target.checked);
+  });
 });
 
 function clearForm() {
@@ -2727,6 +2804,8 @@ function clearForm() {
   ['f-followup','f-photo','f-weekcoord','f-teamEvent'].forEach(id => {
     document.getElementById(id).checked = false;
   });
+  providerPicker.setTeamEvent(false);
+  providersPicker.setTeamEvent(false);
   providerPicker.clear();
   providersPicker.clear();
   ceTeamPicker.clear();
