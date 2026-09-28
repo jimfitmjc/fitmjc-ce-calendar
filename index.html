@@ -995,6 +995,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="info-row"><i class="ti ti-calendar info-icon"></i><div><div class="info-main" id="dm-date"></div><div class="info-sub" id="dm-time"></div></div></div>
       <div class="info-row"><i class="ti ti-map-pin info-icon"></i><div><div class="info-main" id="dm-loc"></div><div class="info-sub" id="dm-addr"></div></div></div>
       <div class="info-row"><i class="ti ti-user info-icon"></i><div><div class="info-main" id="dm-schedby"></div><div class="info-sub">Scheduled by</div></div></div>
+      <div class="info-row" id="dm-timing-row" style="display:none"><i class="ti ti-clock-hour-3 info-icon"></i><div><div class="info-main" id="dm-arrival"></div><div class="info-sub" id="dm-duration-display"></div></div></div>
     </div>
     
 <!-- Document link -->
@@ -1096,7 +1097,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
         </select>
       </div>
     </div>
-
+    
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Arrival / setup time</label>
+        <input type="text" class="form-input" id="f-arrivaltime" placeholder="e.g. 8:30 AM or 30 min before event">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expected duration</label>
+        <input type="text" class="form-input" id="f-duration" placeholder="e.g. 2 hours">
+      </div>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Event category <span class="required">*</span></label>
@@ -1972,6 +1983,8 @@ function spItemToEvent(item) {
     })(),
     notes,
     schedBy:   f.EventScheduledBy || '',
+    arrivalTime: f.CE_ArrivalTime || '',
+    duration:    f.CE_ExpectedDuration || '',
     status:    f.CE_Status || 'Scheduled',
     category:  f.CE_EventCategory || 'Community Event',
     coordContact: f.CE_CoordinatorContact || '',
@@ -2113,6 +2126,8 @@ function eventToSpFields(formData) {
     CE_EventCategory:        formData.category    || 'Community Event',
     CE_CoordinatorContact:   formData.coordContact || '',
     CE_DocumentLink:         formData.docLink      || '',
+    CE_ArrivalTime:          formData.arrivalTime  || '',
+    CE_ExpectedDuration:     formData.duration     || '',
     Address:                 combinedAddress,
     Otherdetails:            formData.notes        || '',
     EventScheduledBy:        formData.schedBy      || '',
@@ -2608,6 +2623,10 @@ async function openDetailModal(id) {
   document.getElementById('dm-loc').textContent  = ev.location || ev.address || '—';
   document.getElementById('dm-addr').textContent = ev.address && ev.location ? ev.address : '';
   document.getElementById('dm-schedby').textContent = ev.schedBy || '—';
+  const timingRow = document.getElementById('dm-timing-row');
+  document.getElementById('dm-arrival').textContent = ev.arrivalTime ? `Arrival: ${ev.arrivalTime}` : '';
+  document.getElementById('dm-duration-display').textContent = ev.duration ? `Duration: ${ev.duration}` : '';
+  timingRow.style.display = (ev.arrivalTime || ev.duration) ? 'flex' : 'none';
 
   // Document link
   const docLink = ev.CE_DocumentLink || ev.documentLink || '';
@@ -2773,6 +2792,8 @@ function openEditFromDetail() {
   providersPicker.setValue(ev.providers || '');
   ceTeamPicker.setValue(ev.ceTeam || '');
   document.getElementById('f-schedby').value  = ev.schedBy || '';
+  document.getElementById('f-arrivaltime').value = ev.arrivalTime || '';
+  document.getElementById('f-duration').value    = ev.duration    || '';
   document.getElementById('f-notes').value    = ev.notes || '';
   document.getElementById('f-status').value   = ev.status || 'Scheduled';
   document.getElementById('f-category').value    = ev.category || 'Community Event';
@@ -2812,7 +2833,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function clearForm() {
-  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-doclink','f-schedby','f-notes','f-coordcontact'].forEach(id => {
+  ['f-title','f-date','f-time','f-endtime','f-location','f-address','f-doclink','f-schedby','f-notes','f-coordcontact','f-arrivaltime','f-duration'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-status').value = 'Scheduled';
@@ -2852,6 +2873,8 @@ async function saveEvent() {
     providers:providersPicker.getValue(),
     ceTeam:   ceTeamPicker.getValue(),
     schedBy:  document.getElementById('f-schedby').value.trim(),
+    arrivalTime: document.getElementById('f-arrivaltime').value.trim(),
+    duration:    document.getElementById('f-duration').value.trim(),
     notes:    document.getElementById('f-notes').value.trim(),
     followup: document.getElementById('f-followup').checked,
     photo:    document.getElementById('f-photo').checked,
