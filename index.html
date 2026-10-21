@@ -1970,7 +1970,7 @@ function spItemToEvent(item) {
   return {
     id:        item.id,
     title:     f.Title || '',
-    date:      rawDate ? rawDate.split('T')[0] : '',
+    date:      rawDate ? new Date(rawDate).toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }) : '',
     timeRaw:   rawDate,
     // Address field stores "Venue Name | Street Address" — split on read
     location:  (() => {
