@@ -1069,24 +1069,24 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
     <div class="form-group">
       <label class="form-label">Event name <span class="required">*</span></label>
-      <input type="text" class="form-input" id="f-title" placeholder="e.g. Run It BlaKC Run Club">
+      <input autocomplete="off" type="text" class="form-input" id="f-title" placeholder="e.g. Run It BlaKC Run Club">
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Date <span class="required">*</span></label>
-        <input type="date" class="form-input" id="f-date">
+        <input autocomplete="off" type="date" class="form-input" id="f-date">
       </div>
       <div class="form-group">
         <label class="form-label">Start time</label>
-        <input type="time" class="form-input" id="f-time">
+        <input autocomplete="off" type="time" class="form-input" id="f-time">
       </div>
     </div>
 
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">End time</label>
-        <input type="time" class="form-input" id="f-endtime">
+        <input autocomplete="off" type="time" class="form-input" id="f-endtime">
       </div>
       <div class="form-group">
         <label class="form-label">Status</label>
@@ -1101,11 +1101,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Arrival / setup time</label>
-        <input type="text" class="form-input" id="f-arrivaltime" placeholder="e.g. 8:30 AM or 30 min before event">
+        <input autocomplete="off" type="text" class="form-input" id="f-arrivaltime" placeholder="e.g. 8:30 AM or 30 min before event">
       </div>
       <div class="form-group">
         <label class="form-label">Expected duration</label>
-        <input type="text" class="form-input" id="f-duration" placeholder="e.g. 2 hours">
+        <input autocomplete="off" type="text" class="form-input" id="f-duration" placeholder="e.g. 2 hours">
       </div>
     </div>
     <div class="form-row">
@@ -1118,19 +1118,19 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       </div>
       <div class="form-group">
         <label class="form-label">Coordinator contact</label>
-        <input type="text" class="form-input" id="f-coordcontact" placeholder="Name · phone · email">
+        <input autocomplete="off" type="text" class="form-input" id="f-coordcontact" placeholder="Name · phone · email">
         <div class="form-hint">Shown in all automated emails to providers</div>
       </div>
     </div>
 
     <div class="form-group">
       <label class="form-label">Location / venue name</label>
-      <input type="text" class="form-input" id="f-location" placeholder="e.g. Elite Tennis and Wellness">
+      <input autocomplete="off" type="text" class="form-input" id="f-location" placeholder="e.g. Elite Tennis and Wellness">
     </div>
 
     <div class="form-group">
       <label class="form-label">Address</label>
-      <input type="text" class="form-input" id="f-address" placeholder="Street address, City, State">
+      <input autocomplete="off" type="text" class="form-input" id="f-address" placeholder="Street address, City, State">
     </div>
 
     <div class="form-group">
@@ -1151,18 +1151,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
     <div class="form-group">
       <label class="form-label">Scheduled by</label>
-      <input type="text" class="form-input" id="f-schedby" placeholder="Coordinator name">
+      <input autocomplete="off" type="text" class="form-input" id="f-schedby" placeholder="Coordinator name">
     </div>
 
     <div class="form-group">
       <label class="form-label">Document link</label>
-      <input type="text" class="form-input" id="f-doclink" placeholder="https://...">
+      <input autocomplete="off" type="text" class="form-input" id="f-doclink" placeholder="https://...">
       <div class="form-hint">SharePoint or OneDrive link to flyer, parking pass, etc.</div>
     </div>
     
     <div class="form-group">
       <label class="form-label">Event notes / other details</label>
-      <textarea class="form-textarea" id="f-notes" placeholder="Contact info, equipment needed, event type, any additional details..."></textarea>
+      <textarea autocomplete="off" class="form-textarea" id="f-notes" placeholder="Contact info, equipment needed, event type, any additional details..."></textarea>
     </div>
 
     <!-- Checklist -->
@@ -1170,16 +1170,16 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
       <div class="form-label">Coordinator checklist</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-followup" style="width:15px;height:15px;accent-color:var(--brand)"> Event coordinator sent
+          <input autocomplete="off" type="checkbox" id="f-followup" style="width:15px;height:15px;accent-color:var(--brand)"> Event coordinator sent
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-photo" style="width:15px;height:15px;accent-color:var(--brand)"> Social photo captured
+          <input autocomplete="off" type="checkbox" id="f-photo" style="width:15px;height:15px;accent-color:var(--brand)"> Social photo captured
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-weekcoord" style="width:15px;height:15px;accent-color:var(--brand)"> Week of email to coordinator sent
+          <input autocomplete="off" type="checkbox" id="f-weekcoord" style="width:15px;height:15px;accent-color:var(--brand)"> Week of email to coordinator sent
         </label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="f-teamEvent" style="width:15px;height:15px;accent-color:var(--brand)"> Team event
+          <input autocomplete="off" type="checkbox" id="f-teamEvent" style="width:15px;height:15px;accent-color:var(--brand)"> Team event
         </label>
       </div>
     </div>
@@ -1984,6 +1984,7 @@ function spItemToEvent(item) {
     notes,
     schedBy:   f.EventScheduledBy || '',
     arrivalTime: f.CE_ArrivalTime || '',
+    endTime:     f.CE_EndTime     || '',
     duration:    f.CE_ExpectedDuration || '',
     status:    f.CE_Status || 'Scheduled',
     category:  f.CE_EventCategory || 'Community Event',
@@ -2003,6 +2004,7 @@ function spItemToEvent(item) {
     photo:     f.SocialPhotoCaptured     || '',
     nextEvent: '',
     weekCoord: f.CE_WeekOfCoordinatorSent ? 'yes' : '',
+    weekCoordDate: f.CE_WeekOfCoordinatorSent || '',
     confDate:  f.CE_ConfirmationSentDate || '',
     teamEvent: f.CE_IsTeamEvent ? 'yes' : '',
     documentLink: f.CE_DocumentLink || '',
@@ -2061,27 +2063,29 @@ function spPersonEmailFromFields(fields, ...keys) {
 // Uses the site users endpoint — cached to avoid repeat calls
 const userCache = {};
 async function resolveUserId(lookupId) {
-  if (!lookupId) return '';
+  if (!lookupId) return { name: '', email: '' };
   if (userCache[lookupId]) return userCache[lookupId];
   try {
     const token = await getToken();
     const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists('User Information List')/items/${lookupId}?expand=fields($select=Title,EMail)`;
     const data = await graphFetch(url, token);
     const name = data.fields?.Title || '';
-    userCache[lookupId] = name;
-    return name;
+    userCache[lookupId] = { name, email: (data.fields?.EMail || '').toLowerCase() };
+    return userCache[lookupId];
   } catch(e) {
     console.warn('Could not resolve user ID', lookupId, e);
-    return '';
+    return { name: '', email: '' };
   }
 }
 
 async function resolveProviderNames() {
   // For any event where provider is blank but providerLookupId exists, resolve it
-  const needsResolve = events.filter(e => !e.provider && e.providerLookupId);
+  const needsResolve = events.filter(e => (!e.provider || !e.providerEmail) && e.providerLookupId);
   if (!needsResolve.length) return;
   await Promise.all(needsResolve.map(async ev => {
-    ev.provider = await resolveUserId(ev.providerLookupId);
+    const u = await resolveUserId(ev.providerLookupId);
+    if (!ev.provider)      ev.provider      = u.name;
+    if (!ev.providerEmail) ev.providerEmail = u.email;
   }));
   render();
 }
@@ -2127,6 +2131,7 @@ function eventToSpFields(formData) {
     CE_CoordinatorContact:   formData.coordContact || '',
     CE_DocumentLink:         formData.docLink      || '',
     CE_ArrivalTime:          formData.arrivalTime  || '',
+    CE_EndTime:              formData.endTime      || '',
     CE_ExpectedDuration:     formData.duration     || '',
     Address:                 combinedAddress,
     Otherdetails:            formData.notes        || '',
@@ -2134,6 +2139,9 @@ function eventToSpFields(formData) {
     Followupemailsent:       choiceVal(formData.followup,   'yes'),
     SocialPhotoCaptured:     choiceVal(formData.photo,      'yes'),
     CE_IsTeamEvent:          formData.teamEvent || false,
+    CE_WeekOfCoordinatorSent: formData.weekCoord
+      ? (formData.weekCoordDate || new Date().toISOString())
+      : null,
   };
   if (formData.date) {
     const timeStr = formData.time || '00:00';
@@ -2619,7 +2627,9 @@ async function openDetailModal(id) {
   document.getElementById('dm-cebar').style.display = ceNames.length ? 'flex' : 'none';
 
   document.getElementById('dm-date').textContent = `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  document.getElementById('dm-time').textContent = t || 'Time not set';
+  document.getElementById('dm-time').textContent = t
+    ? (ev.endTime ? `${t} – ${fmtHHMM(ev.endTime)}` : t)
+    : 'Time not set';
   document.getElementById('dm-loc').textContent  = ev.location || ev.address || '—';
   document.getElementById('dm-addr').textContent = ev.address && ev.location ? ev.address : '';
   document.getElementById('dm-schedby').textContent = ev.schedBy || '—';
@@ -2755,6 +2765,14 @@ async function openDetailModal(id) {
   openModal('detailModal');
 }
 
+// "19:30" (time input value) -> "7:30 PM"
+function fmtHHMM(v) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(v || '');
+  if (!m) return v || '';
+  const h = +m[1];
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
 // ── FORM MODAL ────────────────────────────────────────────
 function openNewEventModal() {
   editingEventId = null;
@@ -2793,14 +2811,16 @@ function openEditFromDetail() {
   ceTeamPicker.setValue(ev.ceTeam || '');
   document.getElementById('f-schedby').value  = ev.schedBy || '';
   document.getElementById('f-arrivaltime').value = ev.arrivalTime || '';
+  document.getElementById('f-endtime').value     = ev.endTime     || '';
   document.getElementById('f-duration').value    = ev.duration    || '';
   document.getElementById('f-notes').value    = ev.notes || '';
   document.getElementById('f-status').value   = ev.status || 'Scheduled';
   document.getElementById('f-category').value    = ev.category || 'Community Event';
   document.getElementById('f-coordcontact').value= ev.coordContact || '';
-  document.getElementById('f-followup').checked  = ev.followup === 'yes';
-  document.getElementById('f-photo').checked     = ev.photo === 'yes';
-  document.getElementById('f-weekcoord').checked = ev.weekCoord === 'yes';
+  const isYes = v => String(v || '').toLowerCase() === 'yes';
+  document.getElementById('f-followup').checked  = isYes(ev.followup);
+  document.getElementById('f-photo').checked     = isYes(ev.photo);
+  document.getElementById('f-weekcoord').checked = isYes(ev.weekCoord);
   document.getElementById('f-teamEvent').checked  = ev.teamEvent === 'yes';
 
   if (ev.timeRaw) {
@@ -2863,6 +2883,7 @@ async function saveEvent() {
     title,
     date,
     time:     document.getElementById('f-time').value,
+    endTime:  document.getElementById('f-endtime').value,
     status:      document.getElementById('f-status').value,
     category:    document.getElementById('f-category').value,
     coordContact:document.getElementById('f-coordcontact').value.trim(),
@@ -2879,6 +2900,7 @@ async function saveEvent() {
     followup: document.getElementById('f-followup').checked,
     photo:    document.getElementById('f-photo').checked,
     weekCoord:document.getElementById('f-weekcoord').checked,
+    weekCoordDate: editingEventId ? ((events.find(e => e.id === editingEventId) || {}).weekCoordDate || '') : '',
     teamEvent:document.getElementById('f-teamEvent').checked,
   };
 
@@ -2891,7 +2913,11 @@ async function saveEvent() {
     events[idx] = { ...events[idx], ...formData,
           timeRaw: fields.Date || events[idx].timeRaw,
           provider: formData.provider, providers: formData.providers, ceTeam: formData.ceTeam,
-          documentLink: formData.docLink, teamEvent: formData.teamEvent ? 'yes' : '' };
+          documentLink: formData.docLink, teamEvent: formData.teamEvent ? 'yes' : '',
+          followup:  formData.followup  ? 'yes' : '',
+          photo:     formData.photo     ? 'yes' : '',
+          weekCoord: formData.weekCoord ? 'yes' : '',
+          weekCoordDate: fields.CE_WeekOfCoordinatorSent || '' };
       }
       showToast('Event updated ✓', 'success');
     } else {
@@ -2901,6 +2927,7 @@ async function saveEvent() {
     }
     closeModal('formModal');
     render();
+    resolveProviderNames(); // fill in primary provider name/email for My Events
   } catch(e) {
     console.error('Save error', e);
     showToast('Save failed — check console for details', 'error');
