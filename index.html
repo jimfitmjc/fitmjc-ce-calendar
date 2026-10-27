@@ -498,6 +498,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   position: relative;
 }
 .week-slot:last-child { border-bottom: none; }
+/* Events sharing an hour sit side by side so none spill under the next row */
+.week-slot { display: flex; align-items: flex-start; overflow: hidden; }
+.week-slot > .week-ev { flex: 1 1 0; min-width: 0; }
 .week-pool-banner {
   background: #F1F5F9; border-bottom: 1px solid #E2E8F0;
   padding: 4px 6px; font-size: 9px; color: #475569; font-weight: 600;
@@ -2404,7 +2407,7 @@ function renderWeek() {
           ? new Date(ev.timeRaw).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})
           : '';
         const prov = ev.provider || (ev.providers ? ev.providers.split(';')[0].trim() : '');
-        html += `<div class="week-ev s-${ev.status}" onclick="openDetailModal('${ev.id}')" title="${ev.title}">
+        html += `<div class="week-ev s-${ev.status}" onclick="openDetailModal('${ev.id}')" title="${ev.title}${t ? ' · ' + t : ''}${prov ? ' · ' + prov : ''}">
           <div class="week-ev-time">${t}</div>
           <div class="week-ev-title">${ev.title}</div>
           ${prov ? `<div class="week-ev-prov">${prov}</div>` : ''}
@@ -2579,10 +2582,15 @@ function renderList() {
 async function fetchProviderConfirmations(eventId) {
   try {
     const token = await getToken();
-    const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$top=50`;
-    const data = await graphFetch(url, token);
+    let url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_CONFIRMATIONS_LIST_ID}/items?expand=fields($select=CE_EventId,CE_ProviderEmail,CE_ProviderName,CE_Confirmed)&$top=999`;
+    const items = [];
+    while (url) {                         // follow paging so no records are missed
+      const data = await graphFetch(url, token);
+      items.push(...(data.value || []));
+      url = data['@odata.nextLink'] || null;
+    }
     const map = {};
-    (data.value || []).forEach(item => {
+    items.forEach(item => {
       const f = item.fields;
       if (f.CE_ProviderEmail && f.CE_EventId == eventId) {
         map[f.CE_ProviderEmail.toLowerCase()] = f.CE_Confirmed?.Value || f.CE_Confirmed || 'Pending';
@@ -3310,3 +3318,4 @@ if (typeof msal !== 'undefined') {
 </script>
 </body>
 </html>
+
