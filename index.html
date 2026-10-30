@@ -2682,51 +2682,52 @@ async function openDetailModal(id) {
   }
 
   // Provider assignment — fetch live confirmation statuses from CE_ProviderConfirmations
-  const assigned = [ev.provider, ev.providers].filter(Boolean).join('; ').split(';').map(s=>s.trim()).filter(Boolean);
+  // Pair each assigned name with its email (same order as SharePoint returns
+  // them). Statuses are looked up by email, so a display-name difference
+  // between SharePoint and the roster ("Matt" vs "Matthew") can't break it.
+  const splitList = v => (v || '').split(';').map(x => x.trim()).filter(Boolean);
+  const pairUp = (names, emails) => {
+    const n = splitList(names), e = splitList(emails).map(x => x.toLowerCase());
+    return n.map((name, i) => {
+      const roster = PROVIDER_ROSTER.find(r => r.name.toLowerCase() === name.toLowerCase());
+      return { name, email: e[i] || (roster ? roster.email.toLowerCase() : '') };
+    });
+  };
+  const assignedPeople = [...pairUp(ev.provider, ev.providerEmail), ...pairUp(ev.providers, ev.providersEmail)]
+    .filter((p, i, arr) => arr.findIndex(q => (q.email || q.name) === (p.email || p.name)) === i);
+  const assigned = assignedPeople.map(p => p.name);
 
   function ini(name) { return name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
 
   // Show chips immediately with names while we fetch statuses
-  document.getElementById('chipsA').innerHTML = assigned.length
-    ? assigned.map(p => {
-        const rosterEntry = PROVIDER_ROSTER.find(r => r.name.toLowerCase() === p.toLowerCase());
-        const email = rosterEntry ? rosterEntry.email.toLowerCase() : '';
-        return `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p)}</span>${p}<span class="pchip-status" data-provider-email="${email}"><i class="ti ti-loader" style="font-size:10px;opacity:.4"></i></span></span>`;
-      }).join('')
+  document.getElementById('chipsA').innerHTML = assignedPeople.length
+    ? assignedPeople.map((p, i) =>
+        `<span class="pchip pchip-assigned"><span class="pav pav-a">${ini(p.name)}</span>${p.name}<span class="pchip-status" data-chip-idx="${i}"><i class="ti ti-loader" style="font-size:10px;opacity:.4"></i></span></span>`
+      ).join('')
     : `<span style="font-size:12px;color:var(--text3)">No providers assigned yet.</span>`;
 
   document.getElementById('confirmMsg').innerHTML = '';
 
   // Fetch live statuses and update chips
-  if (assigned.length && ev.id) {
+  if (assignedPeople.length && ev.id) {
     fetchProviderConfirmations(ev.id).then(statusMap => {
-      // Match provider names to emails via PROVIDER_ROSTER
       const confirmed = [];
       const pending = [];
       const conflict = [];
 
-      assigned.forEach(name => {
-        const rosterEntry = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
-        const email = rosterEntry ? rosterEntry.email.toLowerCase() : name.toLowerCase();
-        const status = statusMap[email] || 'Unknown';
-        if (status === 'Confirmed') confirmed.push(name);
-        else if (status === 'Conflict') conflict.push(name);
-        else pending.push(name);
-      });
+      assignedPeople.forEach((p, i) => {
+        const status = (p.email && statusMap[p.email]) || 'Pending';
+        if (status === 'Confirmed') confirmed.push(p.name);
+        else if (status === 'Conflict') conflict.push(p.name);
+        else pending.push(p.name);
 
-      // Update each chip with its status badge
-      assigned.forEach(name => {
-        const rosterEntry = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
-        const email = rosterEntry ? rosterEntry.email.toLowerCase() : name.toLowerCase();
-        const status = statusMap[email] || 'Pending';
         const statusConfig = {
           Confirmed: { icon: 'ti-circle-check', color: 'var(--conf-bd)', label: 'Confirmed' },
           Pending:   { icon: 'ti-clock',        color: 'var(--text3)',   label: 'Pending'   },
           Conflict:  { icon: 'ti-alert-circle', color: '#DC2626',        label: 'Conflict'  },
-          Unknown:   { icon: 'ti-help-circle',  color: 'var(--text3)',   label: ''          },
         }[status] || { icon: 'ti-clock', color: 'var(--text3)', label: 'Pending' };
 
-        const el = document.querySelector(`.pchip-status[data-provider-email="${email}"]`);
+        const el = document.querySelector(`#chipsA .pchip-status[data-chip-idx="${i}"]`);
         if (el) el.innerHTML = `<i class="ti ${statusConfig.icon}" style="font-size:11px;color:${statusConfig.color}" title="${statusConfig.label}"></i>`;
       });
 
