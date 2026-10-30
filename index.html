@@ -1363,10 +1363,16 @@ async function fetchProviderRoster() {
 
 async function fetchProviderAvailability() {
   const token = await getToken();
-  const url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_PROVIDER_AVAILABILITY_LIST_ID}/items?expand=fields($select=CE_ProviderEmail,CE_BlackoutDate)&$top=999`;
-  const data = await graphFetch(url, token);
+  // Follow paging: an annual survey can produce well over 999 blackout rows
+  let url = `${GRAPH_BASE}/sites/${SP_SITE_ID}/lists/${CE_PROVIDER_AVAILABILITY_LIST_ID}/items?expand=fields($select=CE_ProviderEmail,CE_BlackoutDate)&$top=999`;
+  const items = [];
+  while (url) {
+    const data = await graphFetch(url, token);
+    items.push(...(data.value || []));
+    url = data['@odata.nextLink'] || null;
+  }
   const set = new Set();
-  (data.value || []).forEach(item => {
+  items.forEach(item => {
     const f = item.fields;
     if (f.CE_ProviderEmail && f.CE_BlackoutDate) {
       const dateStr = String(f.CE_BlackoutDate).split('T')[0];
@@ -1411,6 +1417,22 @@ const CE_TEAM_MEMBERS = [
 // the only way to add a person, so saved data always maps to a real
 // roster entry instead of free-typed text that may fail to resolve.
 function ini(name) { return (name||'').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
+// Maps saved names (+ their emails, same order) to roster entries.
+// Email match first, then exact full-name match; otherwise the saved name is
+// kept as-is. No partial/first-name matching.
+function matchPeople(people, namesOrString, emailsString) {
+  const split = v => Array.isArray(v) ? v : (typeof v === 'string' && v.trim() ? v.split(';').map(s => s.trim()).filter(Boolean) : []);
+  const names  = split(namesOrString);
+  const emails = split(emailsString).map(e => e.toLowerCase());
+  const out = names.map((n, i) => {
+    const byEmail = emails[i] && people.find(p => p.email && p.email === emails[i]);
+    if (byEmail) return byEmail.name;
+    const exact = people.find(p => p.name.toLowerCase() === n.toLowerCase());
+    return exact ? exact.name : n;
+  });
+  return [...new Set(out)];
+}
 
 class PersonPicker {
   // options: { containerId, people: [{name, loc}], multi: bool, placeholder }
@@ -1548,20 +1570,11 @@ class PersonPicker {
   }
 
   // Public API
-  setValue(namesOrString) {
-    let names = [];
-    if (Array.isArray(namesOrString)) names = namesOrString;
-    else if (typeof namesOrString === 'string' && namesOrString.trim()) {
-      names = namesOrString.split(';').map(s => s.trim()).filter(Boolean);
-    }
-    // Only keep names that resolve to a real roster entry — best-effort
-    // match for legacy free-typed data saved before the picker existed.
-    this.selected = names.map(n => {
-      const exact = this.people.find(p => p.name.toLowerCase() === n.toLowerCase());
-      if (exact) return exact.name;
-      const partial = this.people.find(p => p.name.toLowerCase().includes(n.toLowerCase().split(' ')[0]));
-      return partial ? partial.name : n; // keep as-is if no roster match found
-    });
+  setValue(namesOrString, emailsString) {
+    // Match saved people by email first (exact), then by exact full name.
+    // Never match on first name alone — "Matthew Cummings" must not become
+    // "Matthew Lane".
+    this.selected = matchPeople(this.people, namesOrString, emailsString);
     if (!this.multi) this.selected = this.selected.slice(0, 1);
     this._renderChips();
   }
@@ -1730,18 +1743,8 @@ class ProviderAssignPanel {
     });
   }
 
-  setValue(namesOrString) {
-    let names = [];
-    if (Array.isArray(namesOrString)) names = namesOrString;
-    else if (typeof namesOrString === 'string' && namesOrString.trim()) {
-      names = namesOrString.split(';').map(s => s.trim()).filter(Boolean);
-    }
-    this.selected = names.map(n => {
-      const exact = this.people.find(p => p.name.toLowerCase() === n.toLowerCase());
-      if (exact) return exact.name;
-      const partial = this.people.find(p => p.name.toLowerCase().includes(n.toLowerCase().split(' ')[0]));
-      return partial ? partial.name : n;
-    });
+  setValue(namesOrString, emailsString) {
+    this.selected = matchPeople(this.people, namesOrString, emailsString);
     this._render();
   }
 
@@ -1751,7 +1754,7 @@ class ProviderAssignPanel {
 
 let providerPicker, providersPicker, ceTeamPicker;
 function initPersonPickers() {
-  const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, loc: p.location, participationLevel: p.participationLevel }));
+  const rosterPeople = PROVIDER_ROSTER.map(p => ({ name: p.name, email: (p.email || '').toLowerCase(), loc: p.location, participationLevel: p.participationLevel }));
   const ceTeamPeople = CE_TEAM_MEMBERS.map(m => ({ name: m.name, loc: m.role }));
   providerPicker  = new PersonPicker({ containerId: 'picker-provider', people: rosterPeople, multi: false, placeholder: 'Type a provider name…' });
   providersPicker = new ProviderAssignPanel({ containerId: 'assign-panel-providers', people: rosterPeople });
@@ -2107,14 +2110,13 @@ async function resolveUserEmail(nameOrEmail) {
     const match = (data.value || []).find(item => {
       const email = (item.fields?.EMail || '').toLowerCase();
       const title = (item.fields?.Title || '').toLowerCase();
-      return email === key || title === key || title.startsWith(key.split(' ')[0].toLowerCase());
+      return email === key || title === key; // exact only — no first-name guessing
     });
     const id = match ? parseInt(match.fields?.id || match.id) : null;
-    userEmailCache[key] = id;
+    if (id) userEmailCache[key] = id; // don't cache misses, so a retry works without reloading
     return id;
   } catch(e) {
     console.warn('Could not resolve user:', nameOrEmail, e);
-    userEmailCache[key] = null;
     return null;
   }
 }
@@ -2164,7 +2166,15 @@ async function eventToSpFieldsWithPeople(formData) {
     const p = PROVIDER_ROSTER.find(p => p.name.toLowerCase() === name.toLowerCase());
     return p ? p.email : null;
   };
-  const resolvePerson = (name) => resolveUserEmail(rosterEmailFor(name) || name);
+  // Exact email, then exact display name. Anyone who can't be found is
+  // reported instead of being silently dropped or swapped for someone else.
+  const unresolved = [];
+  const resolvePerson = async (name) => {
+    const email = rosterEmailFor(name);
+    const id = (email && await resolveUserEmail(email)) || await resolveUserEmail(name);
+    if (!id) unresolved.push(name);
+    return id;
+  };
 
   // Provider (single) → ProviderLookupId
   if (formData.provider) {
@@ -2203,6 +2213,13 @@ async function eventToSpFieldsWithPeople(formData) {
     fields.CETeamMemberLookupId = null;
   }
 
+  if (unresolved.length) {
+    const err = new Error('Unresolved people: ' + unresolved.join(', '));
+    err.userMessage = `Couldn't find ${unresolved.join(', ')} in the CE SharePoint site's users. ` +
+      `Ask them to open the CE SharePoint site once (or add them to the site), then save again.`;
+    throw err;
+  }
+
   return fields;
 }
 
@@ -2239,7 +2256,7 @@ function isProviderBusyThisWeek(providerName, excludeEventId, dateStr) {
     const evDate = new Date(ev.date + 'T12:00:00');
     if (evDate < mon || evDate > sun) return false;
     const assigned = [ev.provider, ev.providers].filter(Boolean).join(';').toLowerCase();
-    return assigned.includes(nameLower.split(' ')[0]);
+    return assigned.split(';').map(s => s.trim()).includes(nameLower);
   });
 }
 
@@ -2814,8 +2831,8 @@ function openEditFromDetail() {
   updateProviderHint(ev.date);
   providerPicker.setTeamEvent(ev.teamEvent === 'yes');
   providersPicker.setTeamEvent(ev.teamEvent === 'yes');
-  providerPicker.setValue(ev.provider || '');
-  providersPicker.setValue(ev.providers || '');
+  providerPicker.setValue(ev.provider || '', ev.providerEmail || '');
+  providersPicker.setValue(ev.providers || '', ev.providersEmail || '');
   ceTeamPicker.setValue(ev.ceTeam || '');
   document.getElementById('f-schedby').value  = ev.schedBy || '';
   document.getElementById('f-arrivaltime').value = ev.arrivalTime || '';
@@ -2938,7 +2955,7 @@ async function saveEvent() {
     resolveProviderNames(); // fill in primary provider name/email for My Events
   } catch(e) {
     console.error('Save error', e);
-    showToast('Save failed — check console for details', 'error');
+    showToast(e.userMessage || 'Save failed — check console for details', 'error');
   } finally {
     saveBtn.disabled = false;
     saveBtn.innerHTML = '<i class="ti ti-device-floppy" style="font-size:13px"></i> Save event';
