@@ -768,6 +768,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .rot-tags { display: flex; flex-wrap: wrap; gap: 5px; }
 .rot-tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid; }
 .rot-tag-ev { background: var(--conf-bg); color: var(--conf-tx); border-color: #BFDBFE; }
+.rot-tag-closed { background: var(--surface2, #F1F5F9); color: var(--text2); border-color: var(--border2); font-weight: 600; }
+.rot-week-closed { background-image: repeating-linear-gradient(45deg, transparent 0 8px, rgba(148,163,184,.10) 8px 16px); }
 .rot-tag-hol { background: var(--sched-bg); color: var(--sched-tx); border-color: var(--sched-bd); font-weight: 600; }
 .rot-chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .rot-chip { font-size: 12px; padding: 4px 8px; border-radius: 6px; border: 1px solid; }
@@ -2394,7 +2396,7 @@ function getWeekendPool(dateStr) {
   if (!dateStr || liveDataStale) return [];
   const mon = mondayOf(dateStr);
   const sat = dAdd(mon, 5);
-  const notOut = p => !BLACKOUT_SET.has(`${p.email}|${sat}`);
+  const notOut = p => !isOut(p.email, sat);
   // A saved rotation for this week wins; otherwise fall back to everyone at
   // the "Regular" level who hasn't blacked out (pre-rotation behaviour).
   const rot = ROT_BY_WEEK.get(mon);
@@ -2438,6 +2440,7 @@ const CE_CONFIG_LIST_TITLE = 'CE Config';
 
 let ROTATION_ROWS = [];          // [{id, weekStart, email, name, year, source}]
 let ROT_BY_WEEK = new Map();     // 'YYYY-MM-DD' (Monday) -> Set(email)
+let CLOSED_SATS = {};            // 'YYYY-MM-DD' (Saturday) -> holiday name, for weeks closed to CE (CE Config 'Closed: <holiday>')
 let HOLIDAY_SATS = {};           // 'YYYY-MM-DD' (Saturday) -> holiday name
 
 // Date-only helpers (noon UTC so DST never shifts the day)
@@ -2503,7 +2506,10 @@ function tierOn(p, onDate) {
   return { kind: 'team', label: 'Team events only' };
 }
 function rosterByName(name) { return PROVIDER_ROSTER.find(p => p.name.toLowerCase() === String(name).toLowerCase()); }
-function isBlackedOut(email, dateStr) { return BLACKOUT_SET.has(`${email}|${dAdd(mondayOf(dateStr), 5)}`); }
+// Out for a week = personal blackout, or the whole week is closed (e.g. Thanksgiving, Christmas)
+function isOut(email, sat) { return !!CLOSED_SATS[sat] || BLACKOUT_SET.has(`${email}|${sat}`); }
+function closedWeekName(dateStr) { return dateStr ? CLOSED_SATS[dAdd(mondayOf(dateStr), 5)] || '' : ''; }
+function isBlackedOut(email, dateStr) { return isOut(email, dAdd(mondayOf(dateStr), 5)); }
 
 // Non-team, non-cancelled events a provider is assigned to in the same month/quarter
 function countAssignments(email, dateStr, per) {
@@ -2523,6 +2529,8 @@ function countAssignments(email, dateStr, per) {
 function assignmentWarning(name, dateStr, isTeamEvent) {
   const p = rosterByName(name);
   if (!p || !dateStr) return '';
+  const closed = closedWeekName(dateStr);
+  if (closed) return `${closed} week is closed for CE events — no one should be scheduled.`;
   if (isBlackedOut(p.email, dateStr)) return `${p.name} blacked out this week in their availability survey.`;
   if (isTeamEvent) return '';
   const t = tierOn(p, dateStr);
@@ -2557,12 +2565,15 @@ async function graphGetAll(url, token) {
 async function fetchHolidaySaturdays() {
   const token = await getToken();
   const items = await graphGetAll(`${GRAPH_BASE}/sites/${SP_SITE_ID}/lists('${CE_CONFIG_LIST_TITLE}')/items?expand=fields($select=Title,CE_ConfigValue)&$top=999`, token);
-  const map = {};
+  const map = {}, closedNames = new Set();
   items.forEach(it => {
     const t = it.fields?.Title || '';
     if (t.startsWith('Holiday: ')) { const d = spDateOnly(it.fields.CE_ConfigValue); if (d) map[d] = t.slice(9).trim(); }
+    if (t.startsWith('Closed: ')) closedNames.add(normHoliday(t.slice(8)));
   });
-  return map;
+  const closed = {};
+  Object.entries(map).forEach(([sat, name]) => { if (closedNames.has(normHoliday(name))) closed[sat] = name; });
+  return { map, closed };
 }
 async function fetchRotation() {
   const token = await getToken();
@@ -2585,7 +2596,7 @@ function indexRotation() {
 }
 async function loadRotationData() {
   const [hol, rot] = await Promise.allSettled([fetchHolidaySaturdays(), fetchRotation()]);
-  if (hol.status === 'fulfilled') HOLIDAY_SATS = hol.value; else console.warn('Holidays not loaded:', hol.reason);
+  if (hol.status === 'fulfilled') { HOLIDAY_SATS = hol.value.map; CLOSED_SATS = hol.value.closed; } else console.warn('Holidays not loaded:', hol.reason);
   if (rot.status === 'fulfilled') { ROTATION_ROWS = rot.value; indexRotation(); } else console.warn('Rotation not loaded:', rot.reason);
 }
 
@@ -2625,7 +2636,7 @@ function generateRotation(year, keepRows, fromMon) {
       const already = mw.filter(w => result.has(rotKey(w.mon, p.email))).map(w => w.mon);
       const q = t.n - already.length;
       if (q <= 0) return;
-      const avail = mw.filter(w => !already.includes(w.mon) && (!fromMon || w.mon >= fromMon) && !BLACKOUT_SET.has(`${p.email}|${w.sat}`));
+      const avail = mw.filter(w => !already.includes(w.mon) && (!fromMon || w.mon >= fromMon) && !isOut(p.email, w.sat));
       need.push({ p, q, avail, chosen: already.slice() });
     });
     // Most constrained first, then by name so runs are repeatable
@@ -2702,7 +2713,7 @@ function rotationFields(r) {
 }
 
 // ── ROTATION TAB (editors) ────────────────────────────────
-const ROT = { year: null, month: 1, draft: null, saved: null, dirty: false, unplaced: [], busy: false, fresh: new Set(), trimmed: new Map(), trimSummary: null };
+const ROT = { year: null, month: 1, draft: null, saved: null, dirty: false, unplaced: [], busy: false, fresh: new Set(), trimmed: new Map(), trimSummary: null, fillAdded: {} };
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtShort = s => { const d = dParse(s); return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`; };
 
@@ -2777,6 +2788,7 @@ function rotFillGaps() {
     return;
   }
   ROT.draft = rows; added.forEach(k => ROT.fresh.add(k)); ROT.dirty = true;
+  added.forEach(k => { const r = rows.get(k); (ROT.fillAdded[r.email] = ROT.fillAdded[r.email] || []).push(r.weekStart); });
   const people = new Set(added.map(k => k.split('|')[1])).size;
   renderRotation();
   showToast(`Added ${added.length} week${added.length === 1 ? '' : 's'} for ${people} provider${people === 1 ? '' : 's'} — check the green-outlined names, then Save`, 'success');
@@ -2790,6 +2802,11 @@ function rotTrimToTier() {
   const load = {};
   ROT.draft.forEach(r => { load[r.weekStart] = (load[r.weekStart] || 0) + 1; });
   const removed = [];
+  // Closed weeks (e.g. Thanksgiving, Christmas): nobody is on, including weeks placed by hand.
+  [...ROT.draft.values()].filter(r => r.weekStart >= from && CLOSED_SATS[dAdd(r.weekStart, 5)]).forEach(r => {
+    const key = rotKey(r.weekStart, r.email);
+    ROT.draft.delete(key); ROT.trimmed.set(key, r); load[r.weekStart]--; removed.push(r);
+  });
   for (let m = 1; m <= 12; m++) {
     const mw = weeks.filter(w => w.month === m);
     if (!mw.some(w => w.mon >= from)) continue;
@@ -2814,26 +2831,29 @@ function rotTrimToTier() {
       }
     });
   }
-  if (!removed.length) { showToast('Nothing to trim — no one has generated weeks above their tier', ''); renderRotation(); return; }
+  if (!removed.length) { showToast('Nothing to trim — no one is in a closed week or above their tier', ''); renderRotation(); return; }
   ROT.dirty = true;
   rotBuildTrimSummary();
   const people = new Set(removed.map(r => r.email)).size;
   renderRotation();
-  showToast(`Removed ${removed.length} week${removed.length === 1 ? '' : 's'} for ${people} provider${people === 1 ? '' : 's'} — review the crossed-out names, then Save`, 'success');
+  showToast(`Removed ${removed.length} week${removed.length === 1 ? '' : 's'} for ${people} provider${people === 1 ? '' : 's'} — review the crossed-out names, then use Fill gaps to re-place anyone now short, then Save`, 'success');
 }
 function rotBuildTrimSummary() {
   const by = {};
   ROT.trimmed.forEach(r => { (by[r.email] = by[r.email] || { name: r.name, weeks: [] }).weeks.push(r.weekStart); });
-  ROT.trimSummary = Object.values(by).map(x => ({ name: x.name, weeks: x.weeks.sort() })).sort((a, b) => a.name.localeCompare(b.name));
+  ROT.trimSummary = Object.entries(by).map(([email, x]) => ({ email, name: x.name, weeks: x.weeks.sort() })).sort((a, b) => a.name.localeCompare(b.name));
 }
 function rotUndoTrim() {
   ROT.trimmed.forEach((r, k) => ROT.draft.set(k, r));
-  ROT.trimmed = new Map(); ROT.trimSummary = null;
+  ROT.trimmed = new Map(); ROT.trimSummary = null; ROT.fillAdded = {};
   ROT.dirty = [...ROT.draft.keys()].some(k => !ROT.saved.has(k)) || [...ROT.saved.keys()].some(k => !ROT.draft.has(k)) || ROT.fresh.size > 0;
   renderRotation();
 }
 function rotTrimText() {
-  return (ROT.trimSummary || []).map(x => `${x.name}: ${x.weeks.map(w => `week of ${fmtShort(w)}`).join(', ')}`).join('\n');
+  return (ROT.trimSummary || []).map(x => {
+    const added = (ROT.fillAdded[x.email] || []).slice().sort();
+    return `${x.name}: removed ${x.weeks.map(w => `week of ${fmtShort(w)}`).join(', ')}${added.length ? `; new ${added.map(w => `week of ${fmtShort(w)}`).join(', ')}` : ''}`;
+  }).join('\n');
 }
 function rotCopyTrim(btn) {
   const text = rotTrimText();
@@ -2848,7 +2868,7 @@ function rotChecks() {
   const weeks = rotationWeeks(ROT.year);
   const monthOf = mon => Number(dAdd(mon, 5).slice(5, 7));
   const rows = [...ROT.draft.values()].filter(r => r.weekStart >= from);
-  const clashes = rows.filter(r => BLACKOUT_SET.has(`${r.email}|${dAdd(r.weekStart, 5)}`))
+  const clashes = rows.filter(r => isOut(r.email, dAdd(r.weekStart, 5)))
     .map(r => ({ name: r.name, month: monthOf(r.weekStart), mon: r.weekStart }))
     .sort((a, b) => a.mon.localeCompare(b.mon) || a.name.localeCompare(b.name));
   const over = [];
@@ -2953,23 +2973,24 @@ function renderRotation() {
       const p = PROVIDER_ROSTER.find(x => x.email === r.email);
       const t = p ? tierOn(p, w.mon) : null;
       const cls = r.source === 'Manual' ? 'rot-chip-manual' : (t && t.kind === 'weeks' && t.n === 1 ? 'rot-chip-one' : 'rot-chip-two');
-      const out = BLACKOUT_SET.has(`${r.email}|${w.sat}`);
+      const out = isOut(r.email, w.sat);
       const fresh = ROT.fresh.has(rotKey(w.mon, r.email));
       return `<button type="button" class="rot-chip ${cls}${out ? ' rot-chip-out' : ''}${fresh ? ' rot-chip-new' : ''}" title="${out ? 'Blacked out this week — consider moving' : fresh ? 'Added by Fill gaps — not saved yet' : escHtml(t?.label || '')}" onclick="rotOpenSwap('${w.mon}','${escHtml(r.email)}')">${out ? '<i class="ti ti-alert-triangle"></i> ' : ''}${escHtml(r.name)}</button>`;
     }).join('');
     const gone = [...ROT.trimmed.values()].filter(r => r.weekStart === w.mon).sort((a, b) => a.name.localeCompare(b.name))
       .map(r => `<span class="rot-chip rot-chip-gone" title="Removed by Trim to tier — not saved yet">${escHtml(r.name)}</span>`).join('');
-    return `<div class="rot-week">
+    const closed = CLOSED_SATS[w.sat];
+    return `<div class="rot-week${closed ? ' rot-week-closed' : ''}">
       <div class="rot-week-hdr">
         <div><div class="rot-week-title">Week of ${fmtShort(w.mon)}</div><div class="rot-week-range">Mon ${fmtShort(w.mon)} – Sun ${fmtShort(w.sun)}</div></div>
         <div class="rot-count">${rows.length} on</div>
       </div>
       <div class="rot-tags">
         <span class="rot-tag rot-tag-ev">${rotEventsInWeek(w)} event${rotEventsInWeek(w) === 1 ? '' : 's'} scheduled</span>
-        ${hol ? `<span class="rot-tag rot-tag-hol">${escHtml(hol)} weekend</span>` : ''}
+        ${closed ? `<span class="rot-tag rot-tag-closed"><i class="ti ti-lock"></i> Closed — ${escHtml(closed)} week</span>` : hol ? `<span class="rot-tag rot-tag-hol">${escHtml(hol)} weekend</span>` : ''}
       </div>
-      <div class="rot-chips">${chips || '<span class="assign-empty">No one on this week</span>'}${gone}</div>
-      <button type="button" class="rot-add" onclick="rotOpenAdd('${w.mon}')"><i class="ti ti-plus"></i> Add someone</button>
+      <div class="rot-chips">${chips || `<span class="assign-empty">${closed ? 'Closed to CE — no rotation this week' : 'No one on this week'}</span>`}${gone}</div>
+      ${closed ? '' : `<button type="button" class="rot-add" onclick="rotOpenAdd('${w.mon}')"><i class="ti ti-plus"></i> Add someone</button>`}
     </div>`;
   }).join('');
 
@@ -3021,7 +3042,7 @@ function renderRotation() {
         </ul>
       </div>
       ${ROT.trimSummary && ROT.trimSummary.length ? `<div class="rot-card"><h2>${ROT.trimmed.size ? 'Removed by Trim to tier (not saved yet)' : 'Removed by Trim to tier (saved)'}</h2>
-        <ul class="rot-list rot-trim-list">${ROT.trimSummary.map(x => `<li><span>${escHtml(x.name)}</span><span>${x.weeks.map(fmtShort).join(', ')}</span></li>`).join('')}</ul>
+        <ul class="rot-list rot-trim-list">${ROT.trimSummary.map(x => `<li><span>${escHtml(x.name)}</span><span>${x.weeks.map(fmtShort).join(', ')}${(ROT.fillAdded[x.email] || []).length ? ` → ${ROT.fillAdded[x.email].slice().sort().map(fmtShort).join(', ')}` : ''}</span></li>`).join('')}</ul>
         <div class="rot-trim-actions"><button type="button" class="rot-btn" onclick="rotCopyTrim(this)">Copy list</button>${ROT.trimmed.size ? '<button type="button" class="rot-btn" onclick="rotUndoTrim()">Undo trim</button>' : ''}</div>
       </div>` : ''}
       <div class="rot-card"><h2>Check these (this week on)</h2>
@@ -3051,7 +3072,7 @@ function renderRotation() {
 function rotSetMonth(m) { ROT.month = m; renderRotation(); }
 function rotChangeYear(y) {
   if (ROT.dirty && !confirm('You have unsaved rotation changes. Switch year and discard them?')) { renderRotation(); return; }
-  rotLoadYear(Number(y)); ROT.trimSummary = null; ROT.month = 1; renderRotation();
+  rotLoadYear(Number(y)); ROT.trimSummary = null; ROT.fillAdded = {}; ROT.month = 1; renderRotation();
 }
 
 // Swap / remove one provider's week
@@ -3065,7 +3086,7 @@ function rotOpenSwap(mon, email) {
     const count = rotWeekRows(w.mon).length;
     const isCur = w.mon === mon;
     const taken = !isCur && ROT.draft.has(rotKey(w.mon, email));
-    const out = BLACKOUT_SET.has(`${email}|${w.sat}`);
+    const out = isOut(email, w.sat);
     const hol = HOLIDAY_SATS[w.sat];
     const pref = hol ? p.holidayPrefs?.[normHoliday(hol)] : null;
     const note = isCur ? 'current' : taken ? 'already on' : out ? 'blacked out' : '';
@@ -3112,7 +3133,7 @@ function rotOpenAdd(mon) {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(p => {
       const t = tierOn(p, mon);
-      const out = BLACKOUT_SET.has(`${p.email}|${sat}`);
+      const out = isOut(p.email, sat);
       return `<option value="${escHtml(p.email)}">${escHtml(p.name)} — ${escHtml(t.label)}${out ? ' · BLACKED OUT' : ''}</option>`;
     }).join('');
   rotShowModal(`
@@ -3132,7 +3153,7 @@ function rotApplyAdd(mon) {
   const email = document.getElementById('rotAddSel')?.value;
   const p = PROVIDER_ROSTER.find(x => x.email === email);
   if (!p) { rotCloseModal(); return; }
-  if (BLACKOUT_SET.has(`${email}|${dAdd(mon, 5)}`) && !confirm(`${p.name} blacked out this week. Add anyway?`)) return;
+  if (isOut(email, dAdd(mon, 5)) && !confirm(`${p.name} blacked out this week. Add anyway?`)) return;
   ROT.draft.set(rotKey(mon, email), { weekStart: mon, email, name: p.name, year: ROT.year, source: 'Manual' });
   ROT.dirty = true; rotCloseModal(); renderRotation();
 }
@@ -3254,7 +3275,8 @@ function renderWeek() {
   if (curTab === 'myevents' && currentUser.email) {
     const me = currentUser.email.toLowerCase();
     const mon = localYmd(days[0]);
-    if (BLACKOUT_SET.has(`${me}|${dAdd(mon, 5)}`)) html += '<div class="my-week-banner out">Blacked out this week</div>';
+    if (CLOSED_SATS[dAdd(mon, 5)]) html += `<div class="my-week-banner out">${escHtml(CLOSED_SATS[dAdd(mon, 5)])} week — closed for CE</div>`;
+    else if (isOut(me, dAdd(mon, 5))) html += '<div class="my-week-banner out">Blacked out this week</div>';
     else if (ROT_BY_WEEK.get(mon)?.has(me)) html += '<div class="my-week-banner on">You\'re on rotation this week</div>';
   }
 
@@ -3381,14 +3403,14 @@ function renderCalendar() {
     let myRot = '';
     if (curTab === 'myevents' && currentUser.email) {
       const me = currentUser.email.toLowerCase();
-      if (BLACKOUT_SET.has(`${me}|${satDateStr}`)) myRot = 'out';
+      if (isOut(me, satDateStr)) myRot = 'out';
       else if (ROT_BY_WEEK.get(rowMon)?.has(me)) myRot = 'on';
     }
     if (myRot) {
       poolCell.classList.add(`my-rot-${myRot}`);
       const lbl = document.createElement('div');
       lbl.className = `my-rot-label ${myRot}`;
-      lbl.textContent = myRot === 'on' ? 'On rotation' : 'Blacked out';
+      lbl.textContent = myRot === 'on' ? 'On rotation' : CLOSED_SATS[satDateStr] ? 'Closed (holiday)' : 'Blacked out';
       poolCell.appendChild(lbl);
     }
     if (pool.length) {
@@ -3774,6 +3796,12 @@ function openEditFromDetail() {
 function updateProviderHint(dateStr) {
   const pool = getWeekendPool(dateStr);
   const hint = document.getElementById('f-provider-hint');
+  const closed = closedWeekName(dateStr);
+  if (closed) {
+    hint.textContent = `${closed} week is closed for CE events — no one is on rotation.`;
+    if (providersPicker) providersPicker.setDate(dateStr);
+    return;
+  }
   if (pool.length && dateStr) {
     const d = new Date(dateStr + 'T12:00:00');
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -4069,7 +4097,7 @@ function mobRenderStrip() {
       return rp && rp.email.toLowerCase() === currentUser.email.toLowerCase();
     });
 
-    const userOut = BLACKOUT_SET.has(`${currentUser.email.toLowerCase()}|${localYmd(rowStartDate) ? dAdd(localYmd(rowStartDate), 5) : ''}`);
+    const userOut = isOut(currentUser.email.toLowerCase(), localYmd(rowStartDate) ? dAdd(localYmd(rowStartDate), 5) : '');
     html += `<div class="mob-week-row${userOut ? ' blacked' : userInPool ? ' in-pool' : ''}" title="${userOut ? 'Blacked out' : userInPool ? 'On rotation' : ''}">`;
     html += `<div class="mob-week-lbl${userOut ? ' out' : userInPool ? ' pool' : ''}">${userOut ? '×' : userInPool ? '●' : ''}</div>`;
 
