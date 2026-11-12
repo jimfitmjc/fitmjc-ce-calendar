@@ -775,6 +775,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .rot-chip-one { background: var(--ce-purple-light); color: #3C3489; border-color: var(--ce-purple-mid); }
 .rot-chip-manual { background: #fff; color: var(--sched-tx); border: 2px dashed var(--sched-bd); }
 .rot-chip-out { outline: 2px solid #DC2626; outline-offset: 1px; }
+.rot-chip-new { box-shadow: 0 0 0 2px #16A34A; }
+.rot-sw-new { background: transparent; border: 2px solid #16A34A; }
+.rot-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.rot-link:hover { color: var(--brand); }
+.rot-warn { background: #FEF2F2; border: 1px solid #FCA5A5; color: #7F1D1D; border-radius: var(--radius-md); padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.rot-warn-list { margin: 0 0 14px; padding-left: 18px; font-size: 13px; color: var(--text2); display: flex; flex-direction: column; gap: 4px; }
+.rot-btn-danger { background: #B91C1C; border-color: #B91C1C; color: #fff; }
+.rot-btn-danger:disabled { opacity: .45; cursor: not-allowed; }
+.rot-btn-danger:hover:not([disabled]) { background: #991B1B; border-color: #991B1B; color: #fff; }
 .rot-add { align-self: flex-start; font-size: 12px; background: none; border: none; color: var(--text2); padding: 4px 0; }
 .rot-add:hover { color: var(--brand); }
 .rot-side { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -2587,8 +2596,9 @@ function rotationWeeks(year) {
 }
 const rotKey = (mon, email) => `${mon}|${email}`;
 
-// keepRows: rows to keep as-is (manual changes). Returns {rows: Map, unplaced: []}
-function generateRotation(year, keepRows) {
+// keepRows: rows to keep as-is. fromMon: only place into weeks starting on or after this Monday.
+// Returns {rows: Map, unplaced: []}
+function generateRotation(year, keepRows, fromMon) {
   const weeks = rotationWeeks(year);
   const result = new Map();
   const load = {};
@@ -2600,6 +2610,7 @@ function generateRotation(year, keepRows) {
 
   for (let month = 1; month <= 12; month++) {
     const mw = weeks.filter(w => w.month === month);
+    if (fromMon && !mw.some(w => w.mon >= fromMon)) continue;   // month already over
     const tierDate = `${year}-${String(month).padStart(2,'0')}-01`;
     const need = [];
     eligible.forEach(p => {
@@ -2608,7 +2619,7 @@ function generateRotation(year, keepRows) {
       const already = mw.filter(w => result.has(rotKey(w.mon, p.email))).map(w => w.mon);
       const q = t.n - already.length;
       if (q <= 0) return;
-      const avail = mw.filter(w => !already.includes(w.mon) && !BLACKOUT_SET.has(`${p.email}|${w.sat}`));
+      const avail = mw.filter(w => !already.includes(w.mon) && (!fromMon || w.mon >= fromMon) && !BLACKOUT_SET.has(`${p.email}|${w.sat}`));
       need.push({ p, q, avail, chosen: already.slice() });
     });
     // Most constrained first, then by name so runs are repeatable
@@ -2685,7 +2696,7 @@ function rotationFields(r) {
 }
 
 // ── ROTATION TAB (editors) ────────────────────────────────
-const ROT = { year: null, month: 1, draft: null, saved: null, dirty: false, unplaced: [], busy: false };
+const ROT = { year: null, month: 1, draft: null, saved: null, dirty: false, unplaced: [], busy: false, fresh: new Set() };
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtShort = s => { const d = dParse(s); return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`; };
 
@@ -2698,16 +2709,96 @@ function rotLoadYear(year) {
   ROT.draft = new Map([...ROT.saved].map(([k, v]) => [k, { ...v }]));
   ROT.dirty = false;
   ROT.unplaced = [];
+  ROT.fresh = new Set();
 }
 function rotEnsureLoaded() { if (ROT.year === null) { rotLoadYear(rotDefaultYear()); ROT.month = 1; } }
 
+// This week's Monday (Central/local). Weeks before it are history and never changed by the generator.
+function rotThisWeek() { return mondayOf(localYmd(new Date())); }
+
 function rotGenerate() {
-  const manual = [...ROT.draft.values()].filter(r => r.source === 'Manual');
-  if (ROT.draft.size && !confirm(`Regenerate the ${ROT.year} rotation?\n\nChanges you made by hand (${manual.length}) are kept. Everything else is rebuilt from tenure, blackouts and holiday preferences.`)) return;
-  const { rows, unplaced } = generateRotation(ROT.year, manual);
-  ROT.draft = rows; ROT.unplaced = unplaced; ROT.dirty = true;
+  const from = rotThisWeek();
+  const rows = [...ROT.draft.values()];
+  const manual = rows.filter(r => r.source === 'Manual').length;
+  const past = rows.filter(r => r.source !== 'Manual' && r.weekStart < from).length;
+  const willMove = rows.filter(r => r.source !== 'Manual' && r.weekStart >= from);
+  if (ROT.saved.size) { rotOpenRegenerate(manual, past, willMove); return; }
+  if (ROT.draft.size && !confirm(`Regenerate the ${ROT.year} draft?\n\nChanges you made by hand (${manual}) are kept. Everything else is rebuilt from tenure, blackouts and holiday preferences.`)) return;
+  rotRunGenerate();
+}
+function rotRunGenerate() {
+  const from = rotThisWeek();
+  const keep = [...ROT.draft.values()].filter(r => r.source === 'Manual' || r.weekStart < from);
+  const { rows, unplaced } = generateRotation(ROT.year, keep, from);
+  ROT.draft = rows; ROT.unplaced = unplaced; ROT.fresh = new Set(); ROT.dirty = true;
+  rotCloseModal(); renderRotation();
+  showToast(`Generated ${rows.size} weekly assignments — review, then Save`, 'success');
+}
+// A saved rotation has been shared with providers: make regenerating deliberate.
+function rotOpenRegenerate(manual, past, willMove) {
+  const phrase = `REGENERATE ${ROT.year}`;
+  const people = new Set(willMove.map(r => r.email)).size;
+  rotShowModal(`
+    <div class="modal-head"><div class="modal-head-top"><div class="modal-title">Regenerate the saved ${ROT.year} rotation?</div>
+      <button class="modal-close" onclick="rotCloseModal()" aria-label="Close"><i class="ti ti-x"></i></button></div></div>
+    <div class="modal-body">
+      <div class="rot-warn"><strong>This rewrites everyone's future weeks.</strong> ${willMove.length} generated week${willMove.length === 1 ? '' : 's'} for ${people} provider${people === 1 ? '' : 's'}, from this week on, will be rebuilt and may move. Providers will see the new weeks in My Events once you save.</div>
+      <ul class="rot-warn-list">
+        <li>Kept: ${past} past week${past === 1 ? '' : 's'} and ${manual} week${manual === 1 ? '' : 's'} changed by hand.</li>
+        <li>To add a new hire or someone who changed tier without moving anyone else, cancel and use <strong>Fill gaps</strong>.</li>
+      </ul>
+      <label class="form-label" for="rotRegenPhrase">To continue, type <strong>${phrase}</strong></label>
+      <input id="rotRegenPhrase" class="form-input" autocomplete="off" spellcheck="false"
+        oninput="document.getElementById('rotRegenGo').disabled = this.value.trim().toUpperCase() !== '${phrase}'">
+    </div>
+    <div class="modal-foot rot-modal-foot"><span style="flex:1"></span>
+      <button class="rot-btn" onclick="rotCloseModal()">Cancel</button>
+      <button id="rotRegenGo" class="rot-btn rot-btn-danger" onclick="rotRunGenerate()" disabled>Regenerate</button>
+    </div>`);
+  setTimeout(() => document.getElementById('rotRegenPhrase')?.focus(), 50);
+}
+// Place only providers who are short of their tier, from this week on. Nobody else's weeks move.
+function rotFillGaps() {
+  const from = rotThisWeek();
+  const before = new Set(ROT.draft.keys());
+  const { rows, unplaced } = generateRotation(ROT.year, [...ROT.draft.values()], from);
+  const added = [...rows.keys()].filter(k => !before.has(k));
+  ROT.unplaced = unplaced;
+  if (!added.length) {
+    renderRotation();
+    showToast(unplaced.length ? "Nothing could be added — see \u201cCouldn't fully place\u201d" : 'No gaps — everyone already has the weeks their tier needs', '');
+    return;
+  }
+  ROT.draft = rows; added.forEach(k => ROT.fresh.add(k)); ROT.dirty = true;
+  const people = new Set(added.map(k => k.split('|')[1])).size;
   renderRotation();
-  showToast(`Generated ${rows.size} weekly assignments`, 'success');
+  showToast(`Added ${added.length} week${added.length === 1 ? '' : 's'} for ${people} provider${people === 1 ? '' : 's'} — check the green-outlined names, then Save`, 'success');
+}
+// Things to check from this week on: assigned while blacked out, or more weeks than the tier allows.
+function rotChecks() {
+  const from = rotThisWeek();
+  const weeks = rotationWeeks(ROT.year);
+  const monthOf = mon => Number(dAdd(mon, 5).slice(5, 7));
+  const rows = [...ROT.draft.values()].filter(r => r.weekStart >= from);
+  const clashes = rows.filter(r => BLACKOUT_SET.has(`${r.email}|${dAdd(r.weekStart, 5)}`))
+    .map(r => ({ name: r.name, month: monthOf(r.weekStart), mon: r.weekStart }))
+    .sort((a, b) => a.mon.localeCompare(b.mon) || a.name.localeCompare(b.name));
+  const over = [];
+  for (let m = 1; m <= 12; m++) {
+    const mw = weeks.filter(w => w.month === m);
+    if (!mw.some(w => w.mon >= from)) continue;
+    const counts = {};
+    [...ROT.draft.values()].forEach(r => { if (mw.some(w => w.mon === r.weekStart)) counts[r.email] = (counts[r.email] || 0) + 1; });
+    Object.entries(counts).forEach(([email, n]) => {
+      const p = PROVIDER_ROSTER.find(x => x.email === email);
+      if (!p || !p.hireDate) return;
+      const t = tierOn(p, `${ROT.year}-${String(m).padStart(2,'0')}-01`);
+      const allowed = t.kind === 'weeks' ? t.n : 0;
+      if (n > allowed) over.push({ name: p.name, month: m, n, label: t.label });
+    });
+  }
+  over.sort((a, b) => a.month - b.month || a.name.localeCompare(b.name));
+  return { clashes, over };
 }
 
 async function rotSave() {
@@ -2795,7 +2886,8 @@ function renderRotation() {
       const t = p ? tierOn(p, w.mon) : null;
       const cls = r.source === 'Manual' ? 'rot-chip-manual' : (t && t.kind === 'weeks' && t.n === 1 ? 'rot-chip-one' : 'rot-chip-two');
       const out = BLACKOUT_SET.has(`${r.email}|${w.sat}`);
-      return `<button type="button" class="rot-chip ${cls}${out ? ' rot-chip-out' : ''}" title="${out ? 'Blacked out this week — consider moving' : escHtml(t?.label || '')}" onclick="rotOpenSwap('${w.mon}','${escHtml(r.email)}')">${out ? '<i class="ti ti-alert-triangle"></i> ' : ''}${escHtml(r.name)}</button>`;
+      const fresh = ROT.fresh.has(rotKey(w.mon, r.email));
+      return `<button type="button" class="rot-chip ${cls}${out ? ' rot-chip-out' : ''}${fresh ? ' rot-chip-new' : ''}" title="${out ? 'Blacked out this week — consider moving' : fresh ? 'Added by Fill gaps — not saved yet' : escHtml(t?.label || '')}" onclick="rotOpenSwap('${w.mon}','${escHtml(r.email)}')">${out ? '<i class="ti ti-alert-triangle"></i> ' : ''}${escHtml(r.name)}</button>`;
     }).join('');
     return `<div class="rot-week">
       <div class="rot-week-hdr">
@@ -2812,6 +2904,12 @@ function renderRotation() {
   }).join('');
 
   const monthTabs = MONTH_ABBR.map((m, i) => `<button type="button" class="rot-month${ROT.month === i + 1 ? ' active' : ''}" onclick="rotSetMonth(${i + 1})">${m}</button>`).join('');
+  const chk = ROT.draft.size ? rotChecks() : { clashes: [], over: [] };
+  const jump = (m, text) => `<button type="button" class="rot-link" onclick="rotSetMonth(${m})">${text}</button>`;
+  const clashHtml = chk.clashes.length
+    ? chk.clashes.map(c => `<li>${jump(c.month, `${escHtml(c.name)} — week of ${fmtShort(c.mon)}`)}</li>`).join('') : '<li>None</li>';
+  const overHtml = chk.over.length
+    ? chk.over.map(o => `<li>${jump(o.month, `${escHtml(o.name)} — ${MONTH_ABBR[o.month - 1]}: ${o.n} week${o.n > 1 ? 's' : ''} (${escHtml(o.label)})`)}</li>`).join('') : '<li>None</li>';
   const unplacedHtml = ROT.unplaced.length
     ? ROT.unplaced.map(u => `<li>${escHtml(u.name)} — ${MONTH_ABBR[u.month - 1]}: ${u.missing} week${u.missing > 1 ? 's' : ''} short (blacked out)</li>`).join('')
     : '<li>None</li>';
@@ -2828,6 +2926,7 @@ function renderRotation() {
     </div>
     <div class="rot-actions">
       <button type="button" class="rot-btn" onclick="rotExportCsv()" ${ROT.draft.size ? '' : 'disabled'}><i class="ti ti-download"></i> Download for Excel</button>
+      <button type="button" class="rot-btn" onclick="rotFillGaps()" ${ROT.busy || !ROT.saved.size ? 'disabled' : ''} title="Place anyone short of their tier, from this week on. Nobody else's weeks move."><i class="ti ti-wand"></i> Fill gaps</button>
       <button type="button" class="rot-btn" onclick="rotGenerate()" ${ROT.busy ? 'disabled' : ''}><i class="ti ti-refresh"></i> ${ROT.draft.size ? 'Regenerate' : `Generate ${year}`}</button>
       <button type="button" class="rot-btn rot-btn-primary" onclick="rotSave()" ${ROT.busy || !ROT.dirty ? 'disabled' : ''}><i class="ti ti-device-floppy"></i> Save rotation</button>
     </div>
@@ -2850,6 +2949,12 @@ function renderRotation() {
           <li><strong>Changed by hand:</strong> ${manualCount}</li>
         </ul>
       </div>
+      <div class="rot-card"><h2>Check these (this week on)</h2>
+        <ul>
+          <li><strong>Blacked out on an assigned week (${chk.clashes.length}):</strong><ul>${clashHtml}</ul></li>
+          <li><strong>More weeks than their tier allows (${chk.over.length}):</strong><ul>${overHtml}</ul></li>
+        </ul>
+      </div>
       <div class="rot-card"><h2>Tier changes in ${year}</h2>
         <ul class="rot-list">${changes.length ? changes.map(c => `<li><span>${escHtml(c.name)}</span><span>${escHtml(c.when)}</span></li>`).join('') : '<li>None</li>'}</ul>
       </div>
@@ -2861,6 +2966,7 @@ function renderRotation() {
         <span><i class="rot-sw rot-chip-one"></i>1 week / month</span>
         <span><i class="rot-sw rot-chip-manual"></i>Changed by hand</span>
         <span><i class="ti ti-alert-triangle"></i> Blacked out since generating</span>
+        <span><i class="rot-sw rot-sw-new"></i>Added by Fill gaps (not saved)</span>
       </div>
     </aside>
   </div>`;
